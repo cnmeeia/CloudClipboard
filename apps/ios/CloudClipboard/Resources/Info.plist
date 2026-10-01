@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+	<key>CFBundleDisplayName</key>
+	<string>CloudClipboard</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- Custom URL Scheme：cloudclipboard://clipboard/{id} -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>de.cloudclipboard.ios.dev</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cloudclipboard</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- Universal Links：https://clip.0272.de5.net/c/{id} -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:clip.0272.de5.net</string>
+	</array>
+
+	<!-- Quick Actions（长按 App 图标） -->
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.cloudclipboard.ios.dev.quickaction.new</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>新建剪贴板</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>上传当前系统剪贴板</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>plus.circle</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.cloudclipboard.ios.dev.quickaction.search</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>搜索剪贴板</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>在 CloudClipboard 中搜索</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>magnifyingglass</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.cloudclipboard.ios.dev.quickaction.latest</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>最新剪贴板</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>打开最新一条记录</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>clock</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.cloudclipboard.ios.dev.quickaction.settings</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>设置</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>打开设置</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>gearshape</string>
+		</dict>
+	</array>
+
+	<!-- 后台任务标识（必须与 BackgroundTaskScheduler 中的 identifier 一致） -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>de.cloudclipboard.ios.dev.refresh</string>
+		<string>de.cloudclipboard.ios.dev.processing</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+	</array>
+
+	<!-- iOS 26 Liquid Glass：要求系统保持兼容外观，避免布局在跨系统版本时跳动 -->
+	<key>UIDesignRequiresCompatibility</key>
+	<true/>
+
+	<!-- 导入外部文件（Share Extension 反向使用） -->
+	<key>UIFileSharingEnabled</key>
+	<false/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+
+	<!-- 安全：关闭 ATS 例外，强制 HTTPS（默认即如此，这里显式声明意图） -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
+
+	<!-- 剪贴板隐私：明确用途说明 -->
+	<key>NSPasteboardUsageDescription</key>
+	<string>用于把系统剪贴板内容加密后同步到你的其他设备。</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>用于解锁 CloudClipboard 并保护你的剪贴板内容。</string>
+
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBackground</string>
+	</dict>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

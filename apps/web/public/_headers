@@ -1,0 +1,26 @@
+# Service Worker：绝不长期缓存，保证浏览器每次都能拿到最新 SW，
+# 否则旧 SW 一直引用旧资源，PWA 永远停留在旧版本
+/sw.js
+  Cache-Control: no-store
+
+/sw.js.map
+  Cache-Control: no-store
+
+# 应用外壳 / 入口：每次使用前校验，有更新即拉新
+/index.html
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache
+
+# Service Worker 注册引导脚本
+/registerSW.js
+  Cache-Control: no-cache
+
+# 内容哈希文件名的打包产物：内容变则文件名变，可永久缓存
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# 应用清单：入口级文件，保持新鲜
+/manifest.webmanifest
+  Cache-Control: no-cache

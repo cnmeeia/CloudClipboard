@@ -1,0 +1,60 @@
+name: iOS Release（未签名 IPA）
+
+# 推送到 release-ios 分支（或手动触发）时：
+# 在 macOS runner 上无签名构建 iOS App，打包为 IPA 并创建 GitHub Release。
+#
+# 注意：产物为未签名 IPA，仅用于验证构建流程，不可安装到真机。
+# 需要可安装版本时，请按 apps/ios/README.md 接入签名后重新触发。
+
+on:
+  push:
+    branches: ["release-ios"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: 构建未签名 IPA 并发布
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 选择 Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成工程并构建（无签名）
+        run: |
+          cd apps/ios
+          xcodegen generate
+          ./scripts/build-ios.sh ci
+
+      - name: 打包 IPA（Payload 结构，未签名）
+        run: |
+          set -euo pipefail
+          APP_DIR="apps/ios/build/Build/Products/Debug-iphoneos"
+          APP="$(find "$APP_DIR" -maxdepth 1 -name '*.app' | head -1)"
+          test -n "$APP" || { echo "::error::未找到 .app 产物"; exit 1; }
+          echo "使用产物：$APP"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../CloudClipboard-unsigned.ipa Payload)
+          ls -lh CloudClipboard-unsigned.ipa
+
+      - name: 创建 GitHub Release 并上传 IPA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ios-v1.0.0
+        run: |
+          set -euo pipefail
+          gh release delete "$TAG" -y 2>/dev/null || true
+          gh release create "$TAG" CloudClipboard-unsigned.ipa \
+            --title "CloudClipboard iOS v1.0.0（未签名）" \
+            --notes-file .github/release-notes-ios.md
+          echo "Release 已创建：$(gh release view "$TAG" --json url -q .url)"

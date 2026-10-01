@@ -1,0 +1,10 @@
+{
+  "plaintext": "跨端互通测试 · CloudClipboard E2EE · 🎯 <b>html</b>",
+  "seed": "correct horse battery staple cloudclipboard",
+  "userId": "cf_0123456789abcdef0123456789abcdef",
+  "masterKeyRaw": "8tGwi5wDILr8K5RrLjitME2EG4CW7HhUXrIgOzDtWM8",
+  "encrypted": "nwvHYyMcZsHJBCUvTpOAy82MC10XF3N4kgAk5Mna81CA7zVHVRVBYQtDiWJAEiMb_vdJnFh-Y0bnKTLUCZoWm22ueo8Gp9eWnOClW5g",
+  "iv": "u7miA8vN7O2dfx7l",
+  "wrappedKey": "hryJPCmgiTetGM5BZYEYHlqhqswjz1FVGQlN6CWWgnU3B7F15VwiGpWK8p2g9HJ8",
+  "salt": "-ibA74Go0g0e0pXx"
+}

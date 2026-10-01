@@ -1,0 +1,8 @@
+CloudClipboard.xcodeproj 由 XcodeGen 从 project.yml 生成，不提交到仓库。
+
+生成方式：
+    brew install xcodegen
+    cd apps/ios && xcodegen generate
+
+也可以直接跑构建脚本，它会自动检测并生成：
+    ./scripts/build-ios.sh

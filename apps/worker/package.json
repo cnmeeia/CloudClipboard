@@ -1,0 +1,28 @@
+{
+  "name": "@cloudclipboard/worker",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply cloudclipboard --remote",
+    "db:migrate:local": "wrangler d1 migrations apply cloudclipboard --local",
+    "secrets": "wrangler secret bulk < .dev.vars"
+  },
+  "dependencies": {
+    "@cloudclipboard/crypto": "workspace:*",
+    "@cloudclipboard/shared": "workspace:*",
+    "@cloudclipboard/types": "workspace:*",
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7",
+    "wrangler": "^4.125.0"
+  }
+}

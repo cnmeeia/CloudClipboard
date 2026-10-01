@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  App Groups：主 App / Widget / Share Extension 共享 Keychain 与配置。
+	  ⚠️ 免费 Apple ID（Personal Team）不支持 App Groups。
+	  未签名构建（CODE_SIGNING_ALLOWED=NO）下这些 entitlements 只是文件内容，
+	  不影响编译；真机安装时需要付费账号，否则请删除本文件中的 app groups 条目，
+	  代码会自动回退到沙盒目录（见 Core/Storage/SharedStore.swift）。
+	-->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.de.cloudclipboard.ios.dev</string>
+	</array>
+	<!-- Universal Links -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:clip.0272.de5.net</string>
+	</array>
+	<!-- Keychain 共享组（同 Team 内主 App 与 Extension 共享凭据） -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)de.cloudclipboard.ios.dev</string>
+	</array>
+</dict>
+</plist>

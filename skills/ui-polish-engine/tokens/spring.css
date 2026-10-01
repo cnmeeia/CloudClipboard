@@ -1,0 +1,97 @@
+/*
+UI Spring Physics Library
+
+Use these values with:
+
+* Motion
+* Framer Motion
+* Motion One
+* JavaScript animation engines
+*/
+
+:root {
+
+/*
+FAST INTERACTION
+
+Buttons
+Toggles
+Small controls
+*/
+
+--spring-fast-stiffness: 420;
+--spring-fast-damping: 28;
+--spring-fast-mass: 1;
+
+/*
+RESPONSIVE
+
+Cards
+Popovers
+Small panels
+*/
+
+--spring-responsive-stiffness: 320;
+--spring-responsive-damping: 26;
+--spring-responsive-mass: 1;
+
+/*
+SOFT
+
+Panels
+Sidebars
+Floating UI
+*/
+
+--spring-soft-stiffness: 220;
+--spring-soft-damping: 26;
+--spring-soft-mass: 1;
+
+/*
+HEAVY
+
+Large modal
+Large panels
+Fullscreen UI
+*/
+
+--spring-heavy-stiffness: 160;
+--spring-heavy-damping: 24;
+--spring-heavy-mass: 1.2;
+
+/*
+BOUNCY
+
+Celebration
+Success states
+Playful interaction
+Use sparingly.
+*/
+
+--spring-bouncy-stiffness: 380;
+--spring-bouncy-damping: 18;
+--spring-bouncy-mass: 1;
+
+}
+
+/*
+Spring Usage Mapping
+
+Button       → fast
+Toggle       → fast
+Card Hover   → responsive
+Popover      → responsive
+Sidebar      → soft
+Panel        → soft
+Modal        → heavy
+Success      → bouncy
+
+Motion Example:
+
+const spring = {
+  type: "spring",
+  stiffness: 320,
+  damping: 26,
+  mass: 1
+}
+*/

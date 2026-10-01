@@ -1,0 +1,232 @@
+# CloudClipboard iOS — XcodeGen 工程定义
+#
+# 为什么用 XcodeGen：
+#   .xcodeproj/project.pbxproj 是机器生成的巨型文件，手写极易出错，
+#   且多人协作时几乎无法 review。这里把工程定义（target / build settings /
+#   entitlements / plist）收敛到这个 YAML，CI 或开发者本地执行：
+#
+#       brew install xcodegen
+#       cd apps/ios && xcodegen generate
+#
+#   即可得到 CloudClipboard.xcodeproj。
+#
+# 免费 Apple ID（Personal Team）说明：
+#   Personal Team 的 Bundle ID 不能与别人的注册 ID 冲突，所以默认使用
+#   de.cloudclipboard.ios.dev 这一占位前缀，可在 xcconfig / xcodebuild 参数里覆盖：
+#       xcodebuild ... PRODUCT_BUNDLE_IDENTIFIER=com.yourname.cloudclipboard
+#   App Groups 在 Personal Team 下不可用（需要付费账号），因此
+#   SharedStore 在检测到 App Group 不可用时会自动回退到本地目录，
+#   见 Core/Storage/SharedStore.swift。
+
+name: CloudClipboard
+
+options:
+  bundleIdPrefix: de.cloudclipboard
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: true
+  xcodeVersion: "16.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    # 关闭第三方依赖：全部使用 Apple 原生框架（CryptoKit / SwiftData / WidgetKit ...）
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+      SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+      ONLY_ACTIVE_ARCH: YES
+    Release:
+      SWIFT_COMPILATION_MODE: wholemodule
+      SWIFT_OPTIMIZATION_LEVEL: "-O"
+
+packages: {}
+
+targets:
+  # ─────────────────────────────────────────────
+  # 主 App
+  # ─────────────────────────────────────────────
+  CloudClipboard:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CloudClipboard
+        excludes:
+          - "Resources/Info.plist"
+      # 主 App 需要向 Widget 推送摘要（WidgetBridge 与 WidgetItem 同源定义）
+      - path: CloudClipboardWidget/WidgetBridge.swift
+      - path: CloudClipboardWidget/WidgetPayload.swift
+    dependencies:
+      - target: CloudClipboardWidget
+        embed: true
+        codeSign: true
+      - target: CloudClipboardShareExtension
+        embed: true
+        codeSign: true
+      - target: CloudClipboardIntents
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev
+        INFOPLIST_FILE: CloudClipboard/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CloudClipboard/Resources/CloudClipboard.entitlements
+        PRODUCT_NAME: CloudClipboard
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # 免费 Personal Team 场景：不指定 DEVELOPMENT_TEAM，由使用者覆盖
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: YES
+        GENERATE_INFOPLIST_FILE: NO
+        # 允许 Share Extension / Widget 通过 App Group 共享
+        ENABLE_APP_GROUPS: YES
+
+  # ─────────────────────────────────────────────
+  # Widget（WidgetKit）
+  # ─────────────────────────────────────────────
+  CloudClipboardWidget:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CloudClipboardWidget
+        excludes:
+          - "Resources/Info.plist"
+      # Widget 刻意**不做**加解密：
+      #   Widget 进程无法承受 PBKDF2 310k 次迭代，也不应持有主密钥。
+      #   主 App 负责解密并把截断后的摘要写入 App Group，Widget 只读摘要。
+      #   因此这里只共用「摘要」数据类型与共享容器定义。
+      - path: CloudClipboard/Core/Storage/SharedStore.swift
+        group: Shared
+    dependencies:
+      # Widget 自带一份最小实现（SwiftData 缓存 + 解密），不链接 Intents，
+      # 避免 Widget 进程加载不必要的 AppIntent 代码。
+      - sdk: WidgetKit.framework
+      - sdk: SwiftData.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev.widget
+        INFOPLIST_FILE: CloudClipboardWidget/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CloudClipboardWidget/Resources/CloudClipboardWidget.entitlements
+        PRODUCT_NAME: CloudClipboardWidget
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+  # ─────────────────────────────────────────────
+  # Share Extension
+  # ─────────────────────────────────────────────
+  CloudClipboardShareExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CloudClipboardShareExtension
+        excludes:
+          - "Resources/Info.plist"
+    dependencies:
+      # Extension 不重复编译共享代码，统一链接 Intents framework
+      # （它拥有加密 / 模型 / Keychain 的 Extension-safe 实现）
+      - target: CloudClipboardIntents
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev.share
+        INFOPLIST_FILE: CloudClipboardShareExtension/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CloudClipboardShareExtension/Resources/CloudClipboardShareExtension.entitlements
+        PRODUCT_NAME: CloudClipboardShareExtension
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: NO
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+  # ─────────────────────────────────────────────
+  # App Intents（主 App 与 Widget 共用，编成 framework）
+  # ─────────────────────────────────────────────
+  CloudClipboardIntents:
+    type: framework
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CloudClipboardIntents
+      # App Intent 需要共享的模型与加密代码（Extension 侧无法依赖主 App target）
+      - path: CloudClipboard/Models
+        group: Shared
+      - path: CloudClipboard/Core/Security/Base64URL.swift
+        group: Shared
+      - path: CloudClipboard/Core/Security/CryptoService.swift
+        group: Shared
+      - path: CloudClipboard/Core/Extensions/AppLog.swift
+        group: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev.intents
+        PRODUCT_NAME: CloudClipboardIntents
+        SKIP_INSTALL: NO
+        GENERATE_INFOPLIST_FILE: YES
+        # Extension 与主 App 都会链接它，因此框架代码必须满足 extension-safe 约束
+        APPLICATION_EXTENSION_API_ONLY: YES
+        DEFINES_MODULE: YES
+        BUILD_LIBRARY_FOR_DISTRIBUTION: NO
+        SKIP_INSTALL: NO
+        MACH_O_TYPE: mh_dylib
+
+  # ─────────────────────────────────────────────
+  # 单元测试（含 Crypto / Deep Link / Widget payload / Repository）
+  # ─────────────────────────────────────────────
+  CloudClipboardTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CloudClipboardTests
+        # json 测试向量作为 bundle resource（E2EE 跨端互通测试需要读取）
+        buildPhase: resources
+        includes:
+          - "**/*.json"
+      - path: CloudClipboardTests
+        excludes:
+          - "**/*.json"
+    dependencies:
+      - target: CloudClipboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/CloudClipboard.app/CloudClipboard"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  CloudClipboard:
+    build:
+      targets:
+        CloudClipboard: all
+        CloudClipboardWidget: all
+        CloudClipboardShareExtension: all
+        CloudClipboardIntents: all
+        CloudClipboardTests: [test]
+    run:
+      config: Debug
+      # cloudclipboard:// Custom URL Scheme
+      commandLineArguments: {}
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - CloudClipboardTests
+    archive:
+      config: Release
+    profile:
+      config: Release

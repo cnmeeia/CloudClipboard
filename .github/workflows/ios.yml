@@ -1,0 +1,99 @@
+name: iOS
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "apps/ios/**"
+      - ".github/workflows/ios.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crypto-interop:
+    name: E2EE 跨端互通校验（Web 侧）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 生成 Web 端测试向量
+        run: node apps/ios/scripts/generate-crypto-vector.mjs
+      - name: 校验向量一致性（必须与已提交的向量相同）
+        run: |
+          git diff --exit-code apps/ios/CloudClipboardTests/Resources/web-crypto-vector.json \
+            || { echo "::error::向量文件与脚本输出不一致，请重新运行 generate-crypto-vector.mjs 并提交"; exit 1; }
+      - name: E2EE 双向互通 + 安全属性校验（无需 macOS）
+        run: node apps/ios/scripts/verify-crypto-vectors.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crypto-vector
+          path: apps/ios/CloudClipboardTests/Resources/web-crypto-vector.json
+
+  build-and-test:
+    name: 构建 + 测试（无签名）
+    runs-on: macos-15
+    needs: crypto-interop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 选择 Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 解析依赖
+        run: |
+          cd apps/ios
+          xcodegen generate
+          xcodebuild -project CloudClipboard.xcodeproj \
+            -scheme CloudClipboard \
+            -resolvePackageDependencies || true
+
+      - name: 构建（Unsigned Build）
+        run: ./apps/ios/scripts/build-ios.sh ci
+
+      - name: 单元测试（含 E2EE 互通 / Deep Link / 网络层）
+        run: ./apps/ios/scripts/test-ios.sh
+
+      - name: 收集 iOS 测试输出并做 Web 侧反向校验
+        run: |
+          OUTPUT=$(find "$RUNNER_TEMP" /tmp -name ios-crypto-output.json 2>/dev/null | head -1 || true)
+          if [ -n "$OUTPUT" ]; then
+            node apps/ios/scripts/verify-crypto-interop.mjs "$OUTPUT"
+          else
+            echo "::warning::未找到 ios-crypto-output.json，跳过 iOS → Web 反向校验"
+          fi
+
+      - name: 归档（Unsigned Archive，不可分发）
+        run: ./apps/ios/scripts/archive-ios.sh
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: CloudClipboard-ios-build
+          path: |
+            apps/ios/build/Build/Products/**/*.app
+            apps/ios/build/CloudClipboard.xcarchive
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: 上传测试结果
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-results
+          path: apps/ios/build/TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
