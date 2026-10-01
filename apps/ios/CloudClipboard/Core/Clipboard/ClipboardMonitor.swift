@@ -60,8 +60,10 @@ public final class ClipboardMonitor {
         guard changeCount != lastChangeCount else { return nil }
         SharedStore.defaults.set(changeCount, forKey: changeCountKey)
 
-        // 先用 detectPatterns 探测，避免无谓读取
-        guard !pasteboard.detectedPatterns.isEmpty || pasteboard.hasStrings else { return nil }
+        // 先探测是否有文本，避免无谓读取（触发系统剪贴板隐私横幅）。
+        // 注：UIPasteboard 并没有 detectedPatterns 属性；真正的模式探测
+        // detectPatterns(for:completionHandler:) 是异步回调，此处同步流程用 hasStrings。
+        guard pasteboard.hasStrings else { return nil }
 
         guard let text = service.currentString() else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
