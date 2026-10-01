@@ -185,7 +185,7 @@ final class APIClientTests: XCTestCase {
 
     func testInvalidJSONMapsToInvalidResponse() async {
         URLProtocolStub.handler = { request in
-            let data = "<html>not json</html>".data(using: .utf8)!
+            let data = #"{invalid json"#.data(using: .utf8)!
             return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
         }
 
@@ -194,6 +194,24 @@ final class APIClientTests: XCTestCase {
             XCTFail("应当抛错")
         } catch let error as APIError {
             XCTAssertEqual(error, .invalidResponse(status: 200))
+        } catch {
+            XCTFail("错误类型不对: \(error)")
+        }
+    }
+
+    func testHTMLBodyMapsToAccessChallenge() async {
+        // 200 + HTML：被 Cloudflare Access 边缘拦截后的登录页，
+        // 必须报 accessChallenge（明确提示），而不是 invalidResponse。
+        URLProtocolStub.handler = { request in
+            let data = "<html>not json</html>".data(using: .utf8)!
+            return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, data)
+        }
+
+        do {
+            _ = try await makeClient().send(Endpoints.me(), as: MeResponse.self)
+            XCTFail("应当抛错")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .accessChallenge)
         } catch {
             XCTFail("错误类型不对: \(error)")
         }
