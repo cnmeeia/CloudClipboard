@@ -11,6 +11,7 @@
 //
 
 import Foundation
+import CryptoKit
 
 public enum AuthState: Sendable, Equatable {
     /// 尚未配置（缺 Token 或 Worker URL）
