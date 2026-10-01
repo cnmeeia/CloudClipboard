@@ -27,6 +27,9 @@ public enum APIError: Error, LocalizedError, Equatable {
     case api(code: String, message: String, status: Int)
     /// 响应不是合法 JSON
     case invalidResponse(status: Int)
+    /// 请求被 Cloudflare Access 在边缘拦截（返回了登录页 HTML）
+    /// → 需要用户完成 Access 登录（或检查服务器地址是否填的是受 Access 保护的域名）
+    case accessChallenge
     /// 其他
     case transport(String)
 
@@ -53,6 +56,8 @@ public enum APIError: Error, LocalizedError, Equatable {
             return message
         case .invalidResponse(let status):
             return "服务器返回了无法解析的数据（HTTP \(status)）"
+        case .accessChallenge:
+            return "请求被 Cloudflare Access 拦截，请先完成 Access 登录验证"
         case .transport(let message):
             return message
         }
@@ -63,7 +68,7 @@ public enum APIError: Error, LocalizedError, Equatable {
         switch self {
         case .offline, .timeout, .serverError, .rateLimited, .transport:
             return true
-        case .notConfigured, .sessionExpired, .forbidden, .api, .invalidResponse:
+        case .notConfigured, .sessionExpired, .forbidden, .api, .invalidResponse, .accessChallenge:
             return false
         }
     }
@@ -71,6 +76,7 @@ public enum APIError: Error, LocalizedError, Equatable {
     /// 是否应触发「重新登录」引导
     public var requiresReauthentication: Bool {
         if case .sessionExpired = self { return true }
+        if case .accessChallenge = self { return true }
         return false
     }
 

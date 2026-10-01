@@ -16,9 +16,11 @@ struct SettingsView: View {
     @State private var showingSignOutConfirm = false
     @State private var deviceName: String = ""
     @State private var isRenaming = false
+    @State private var isReauthing = false
 
     var body: some View {
         Form {
+            accountSection
             appearanceSection
             syncSection
             securitySection
@@ -43,6 +45,56 @@ struct SettingsView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("本地令牌与种子短语会被清除，云端数据不受影响。")
+        }
+    }
+
+    // MARK: 账号
+
+    private var accountSection: some View {
+        Section("账号") {
+            HStack {
+                Label("登录方式", systemImage: "person.badge.key")
+                Spacer()
+                Text(environment.auth.method.displayName)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                Task { await reauthWithAccess() }
+            } label: {
+                Label(
+                    isReauthing ? "正在打开浏览器…" : "重新进行 Access 登录",
+                    systemImage: "lock.shield"
+                )
+            }
+            .disabled(isReauthing)
+
+            Text("Access 会话会过期（时长由 Cloudflare Zero Trust 决定），过期后点这里重新登录；API 令牌不受影响。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @MainActor
+    private func reauthWithAccess() async {
+        isReauthing = true
+        defer { isReauthing = false }
+        let trimmed = environment.settings.workerURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let baseURL = URL(string: trimmed), baseURL.host != nil else {
+            toast = ToastMessage(text: "服务器地址不正确", style: .error)
+            return
+        }
+        do {
+            let jwt = try await AccessLoginService().signIn(baseURL: baseURL)
+            environment.auth.attachAccessJwt(jwt)
+            await environment.refreshAPIConfiguration()
+            await environment.auth.refreshIdentity()
+            toast = ToastMessage(text: "Access 登录成功", style: .success)
+        } catch let error as AccessLoginError {
+            if case .cancelled = error { return } // 用户取消，静默
+            toast = ToastMessage(text: error.localizedDescription, style: .error)
+        } catch {
+            toast = ToastMessage(text: "登录失败，请重试", style: .error)
         }
     }
 

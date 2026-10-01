@@ -4,14 +4,30 @@
 //
 //  认证与主密钥管理。
 //
-//  认证方式（见 docs/ios-audit.md §2）：API Token（Bearer cca_...）
-//    - Token 存 Keychain
-//    - 启动时用 GET /api/me 校验有效性并取回 userId
-//    - userId 是 PBKDF2 盐的一部分，必须与 Web 端一致
+//  认证方式（见 docs/ios-audit.md §2），两个入口：
+//    1. Cloudflare Access 登录：系统浏览器走 Access 登录页，App 从
+//       CF_Authorization cookie 取 JWT，以 Cf-Access-Jwt-Assertion 头调用 API
+//    2. API Token：Bearer cca_...（Web 端「设置 → API Token」生成）
+//  凭证都存 Keychain；userId 始终从服务端 /api/me 取回（与 Web 端一致，E2EE 互通）。
 //
 
 import Foundation
 import CryptoKit
+
+/// 登录方式（两个入口）
+public enum AuthMethod: String, Sendable {
+    /// Cloudflare Access 浏览器登录
+    case access
+    /// 手动粘贴 API Token
+    case token
+
+    public var displayName: String {
+        switch self {
+        case .access: return "Cloudflare Access"
+        case .token: return "API 令牌"
+        }
+    }
+}
 
 public enum AuthState: Sendable, Equatable {
     /// 尚未配置（缺 Token 或 Worker URL）
@@ -55,13 +71,31 @@ public final class AuthRepository {
         !(keychain.get(.apiToken) ?? "").isEmpty
     }
 
+    public var hasAccessJwt: Bool {
+        !(keychain.get(.accessJwt) ?? "").isEmpty
+    }
+
+    /// 任一凭证可用
+    public var hasCredentials: Bool {
+        hasToken || hasAccessJwt
+    }
+
+    /// 当前登录方式（上次主动选择的入口）
+    public var method: AuthMethod {
+        AuthMethod(rawValue: keychain.get(.authMethod) ?? "") ?? (hasAccessJwt ? .access : .token)
+    }
+
+    /// 上次身份校验是否被 Cloudflare Access 拦截（无有效会话）。
+    /// 为 true 时，上层应引导用户走一次浏览器 Access 登录。
+    public private(set) var needsAccessLogin = false
+
     public var userId: String? {
         keychain.get(.userId)
     }
 
-    /// 启动引导：校验 Token → 取 userId → 检查种子短语
+    /// 启动引导：校验凭证 → 取 userId → 检查种子短语
     public func bootstrap() async {
-        guard hasToken else {
+        guard hasCredentials else {
             state = .unconfigured
             return
         }
@@ -92,6 +126,7 @@ public final class AuthRepository {
                 state = .needsSeedPhrase(userId: remoteUserId)
             }
             lastError = nil
+            needsAccessLogin = false
         } catch let error as APIError {
             if error.requiresReauthentication {
                 state = .expired(error.localizedDescription)
@@ -103,19 +138,43 @@ public final class AuthRepository {
                     state = .unconfigured
                 }
             }
+            // 被 Access 拦截 → 标记，引导浏览器登录（JWT 过期/无会话）
+            if case .accessChallenge = error {
+                needsAccessLogin = true
+            }
         } catch {
             lastError = "无法连接服务器"
         }
     }
 
-    /// 登录：写入 Token + Worker URL，随后校验身份
-    public func signIn(workerURL: String, apiToken: String) async {
+    /// 登录（API Token 入口）：写入 Token + Worker URL。
+    /// 注意：只做持久化，不校验；调用方随后按
+    /// `refreshAPIConfiguration()` → `refreshIdentity()` 的顺序编排，
+    /// 保证网络层先拿到最新凭证再校验（避免用过期配置）。
+    public func signIn(workerURL: String, apiToken: String) {
         let normalizedURL = workerURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedToken = apiToken.trimmingCharacters(in: .whitespacesAndNewlines)
 
         settings.workerURL = normalizedURL
         try? keychain.set(normalizedToken, for: .apiToken)
-        await refreshIdentity()
+        try? keychain.set(AuthMethod.token.rawValue, for: .authMethod)
+    }
+
+    /// 登录（Cloudflare Access 入口）：写入 JWT + Worker URL（同上，只持久化）
+    public func signInWithAccess(workerURL: String, jwt: String) {
+        let normalizedURL = workerURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedJwt = jwt.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        settings.workerURL = normalizedURL
+        try? keychain.set(normalizedJwt, for: .accessJwt)
+        try? keychain.set(AuthMethod.access.rawValue, for: .authMethod)
+    }
+
+    /// 补存 Access JWT（Token 入口被边缘 Access 拦截时，浏览器登录后调用；
+    /// 不改变登录方式展示，JWT 只用于通过边缘，Worker 侧仍优先认 Token）
+    public func attachAccessJwt(_ jwt: String) {
+        try? keychain.set(jwt.trimmingCharacters(in: .whitespacesAndNewlines), for: .accessJwt)
+        needsAccessLogin = false
     }
 
     /// 设置/更新种子短语并派生主密钥

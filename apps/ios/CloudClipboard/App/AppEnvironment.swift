@@ -57,6 +57,7 @@ public final class AppEnvironment {
         configurationStore.configure(
             workerURL: settings.workerURL,
             apiToken: keychain.get(.apiToken),
+            accessJwt: keychain.get(.accessJwt),
             deviceId: keychain.get(.deviceId) ?? "",
             deviceName: keychain.get(.deviceName) ?? ""
         )
@@ -113,6 +114,7 @@ public final class AppEnvironment {
         configurationStore.configure(
             workerURL: settings.workerURL,
             apiToken: keychain.get(.apiToken),
+            accessJwt: keychain.get(.accessJwt),
             deviceId: devices.deviceId,
             deviceName: devices.deviceName
         )
@@ -135,13 +137,14 @@ public final class MutableConfigurationStore: APIConfigurationProviding, @unchec
 
     public init() {}
 
-    public func configure(workerURL: String, apiToken: String?, deviceId: String, deviceName: String) {
+    public func configure(workerURL: String, apiToken: String?, accessJwt: String? = nil, deviceId: String, deviceName: String) {
         let trimmed = workerURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let url = trimmed.isEmpty ? nil : URL(string: trimmed)
         lock.lock()
         configuration = APIConfiguration(
             baseURL: url,
             apiToken: apiToken,
+            accessJwt: accessJwt,
             deviceId: deviceId,
             deviceName: deviceName
         )

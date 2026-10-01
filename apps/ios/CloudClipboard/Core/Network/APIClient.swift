@@ -5,7 +5,8 @@
 //  基于 URLSession 的 API 客户端。不引入任何第三方 HTTP 库。
 //
 //  统一处理：
-//    - Authorization: Bearer <cca_...>（API Token，见 docs/ios-audit.md §2）
+//    - Authorization: Bearer <cca_...>（API Token）或
+//      Cf-Access-Jwt-Assertion: <jwt>（Cloudflare Access，见 docs/ios-audit.md §2）
 //    - x-device-id / x-device-name（与 Web 端一致）
 //    - 401/403/429/5xx → APIError
 //    - 指数退避重试（仅对可重试错误）
@@ -15,22 +16,34 @@ import Foundation
 
 // MARK: - 配置
 
-/// 运行时配置（Worker 地址 + Token + 设备标识）。
+/// 运行时配置（Worker 地址 + 凭证 + 设备标识）。
 /// 由 AppEnvironment 注入，测试可传内存实现。
+///
+/// 凭证有两种（见 docs/ios-audit.md §2），可同时存在：
+/// - apiToken：长期有效的 API Token（`Authorization: Bearer cca_...`），Worker 直接校验
+/// - accessJwt：Cloudflare Access JWT（`CF_Authorization` cookie 的值，短期有效），
+///   以 `Cf-Access-Jwt-Assertion` 请求头发送，Worker 用 JWKS 验签
 public struct APIConfiguration: Sendable, Equatable {
     public var baseURL: URL?
     public var apiToken: String?
+    public var accessJwt: String?
     public var deviceId: String
     public var deviceName: String
 
-    public init(baseURL: URL?, apiToken: String?, deviceId: String, deviceName: String) {
+    public init(baseURL: URL?, apiToken: String?, accessJwt: String? = nil, deviceId: String, deviceName: String) {
         self.baseURL = baseURL
         self.apiToken = apiToken
+        self.accessJwt = accessJwt
         self.deviceId = deviceId
         self.deviceName = deviceName
     }
 
     public static let empty = APIConfiguration(baseURL: nil, apiToken: nil, deviceId: "", deviceName: "")
+
+    /// 是否有任一可用凭证
+    public var hasCredentials: Bool {
+        !(apiToken ?? "").isEmpty || !(accessJwt ?? "").isEmpty
+    }
 }
 
 /// 提供「当前配置」的抽象，方便在 App 运行期热更新（用户改设置后立即生效）。
@@ -152,8 +165,8 @@ public final class APIClient: APIClientProtocol {
         guard let baseURL = configuration.baseURL else {
             throw APIError.notConfigured
         }
-        if request.requiresAuth, (configuration.apiToken ?? "").isEmpty {
-            throw APIError.sessionExpired("尚未配置访问令牌")
+        if request.requiresAuth, !configuration.hasCredentials {
+            throw APIError.sessionExpired("尚未配置登录凭证")
         }
 
         let urlRequest = try build(request, configuration: configuration, baseURL: baseURL)
@@ -204,8 +217,16 @@ public final class APIClient: APIClientProtocol {
         if !configuration.deviceName.isEmpty {
             urlRequest.setValue(configuration.deviceName, forHTTPHeaderField: "x-device-name")
         }
-        if request.requiresAuth, let token = configuration.apiToken, !token.isEmpty {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if request.requiresAuth {
+            if let token = configuration.apiToken, !token.isEmpty {
+                urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            // Access JWT：Worker 用 team JWKS 验签（见 apps/worker/src/auth/index.ts）。
+            // 注意：Cookie（CF_Authorization）由 URLSession 自动携带，走边缘 Access 会话；
+            // 这里再显式带上 JWT 头，双保险（直连无 Access 的 API 域名时靠它）。
+            if let jwt = configuration.accessJwt, !jwt.isEmpty {
+                urlRequest.setValue(jwt, forHTTPHeaderField: "Cf-Access-Jwt-Assertion")
+            }
         }
         if let body = request.body {
             urlRequest.httpBody = body
@@ -231,6 +252,12 @@ public final class APIClient: APIClientProtocol {
 
         switch http.statusCode {
         case 200..<300:
+            // Cloudflare Access 在边缘拦截时会 302 到登录页；
+            // URLSession 自动跟随跳转后拿到的是 200 + HTML 登录页，
+            // 必须识别出来给明确提示，而不是报「无法解析的数据」。
+            if Self.isAccessChallenge(data: data, response: http) {
+                throw APIError.accessChallenge
+            }
             return data
         case 401:
             throw APIError.sessionExpired(Self.errorMessage(from: data))
@@ -253,6 +280,21 @@ public final class APIClient: APIClientProtocol {
 
     private static func errorMessage(from data: Data) -> String {
         (try? JSONDecoder().decode(APIEnvelope.self, from: data))?.error?.message ?? ""
+    }
+
+    /// 识别「被 Cloudflare Access 拦截」的响应：
+    /// 最终 URL 落在 cloudflareaccess.com，或 Content-Type 是 HTML，或 body 以 < 开头。
+    private static func isAccessChallenge(data: Data, response: HTTPURLResponse) -> Bool {
+        if let host = response.url?.host?.lowercased(), host.contains("cloudflareaccess.com") {
+            return true
+        }
+        let contentType = (response.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased()
+        if contentType.contains("text/html") {
+            return true
+        }
+        let head = String(data: data.prefix(64), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return head.hasPrefix("<")
     }
 }
 

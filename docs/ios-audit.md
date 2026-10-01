@@ -36,15 +36,25 @@
 用户身份：`userId = "cf_" + sha256(email.toLowerCase()).hex.slice(0,32)`
 （`identityUserId()`，稳定、跨设备一致，用于数据隔离 **以及 PBKDF2 盐的一部分**）
 
-**对 iOS 的影响（必须记录的真实约束）**：
+**对 iOS 的影响（2026-10-01 更新：双入口已实现）**：
 
-- Cloudflare Access 是浏览器重定向 + Cookie 流程，原生 App 无法拿到 `Cf-Access-Jwt-Assertion`。
-- 因此 **iOS 端唯一可行的认证方式是 API Token（`Authorization: Bearer cca_...`）**。
-- API Token 在 Web 端已可生成（`POST /api/tokens`，`Setting → API Token`）。
+- iOS 有两个登录入口（`Features/Authentication/`）：
+  1. **Cloudflare Access 登录（推荐）**：`ASWebAuthenticationSession` 打开
+     `GET /api/auth/done`（受 Access 保护的域名）→ 用户在系统浏览器完成
+     Access 登录 → Worker 302 跳到 `cloudclipboard://access-auth` 自动关会话
+     （老 Worker 无此路由时用户手动点完成亦可）→ App 从共享 Cookie
+     `CF_Authorization` 取 JWT，以 `Cf-Access-Jwt-Assertion` 头调用 API。
+     会话必须非 ephemeral，Cookie 才会进共享 `HTTPCookieStorage`。
+  2. **API Token（备用）**：`Authorization: Bearer cca_...` 手动粘贴。
+     注意 Worker 域名在 Access 后面时，Token 直连会被边缘 302 到登录页
+     （URLSession 自动跟随 → 200 + HTML）；iOS 侧用 `isAccessChallenge`
+     识别（最终 host 含 cloudflareaccess.com / Content-Type text/html /
+     body 以 `<` 开头），抛 `APIError.accessChallenge` 并自动补一次浏览器登录。
 - ⚠️ `userId` 是从**邮箱**派生的，而 API Token 认证路径下 `auth.userId = row.user_id`（即创建
   token 时就已固化的同一个 `cf_...` id）→ **userId 一致，E2EE 派生的 master key 一致**，
   Web 与 iOS 密文可以互通。这是整个方案成立的前提，已确认成立。
-- iOS 侧不需要、也没有实现 Access JWT 校验（不伪造身份头）。
+  Access JWT 路径下 `userId = identityUserId(jwt.email)`，同一邮箱 → 同一 userId，同样互通。
+- iOS 侧不做 JWT 验签（只透传），验签永远在 Worker 侧用 team JWKS 做。
 
 ## 3. API 清单（与 `apps/worker/src/index.ts` 逐一核对）
 

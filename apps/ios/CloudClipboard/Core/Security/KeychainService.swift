@@ -24,6 +24,10 @@ public enum KeychainKey: String, CaseIterable, Sendable {
     case deviceId = "de.cloudclipboard.apikey.deviceid"
     case userId = "de.cloudclipboard.apikey.userid"
     case deviceName = "de.cloudclipboard.apikey.devicename"
+    /// Cloudflare Access JWT（CF_Authorization cookie 的值，短期有效）
+    case accessJwt = "de.cloudclipboard.apikey.accessjwt"
+    /// 上次登录方式："access" | "token"
+    case authMethod = "de.cloudclipboard.apikey.authmethod"
 }
 
 public protocol KeychainServiceProtocol: Sendable {

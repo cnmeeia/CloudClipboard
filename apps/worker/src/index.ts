@@ -10,6 +10,7 @@
  *
  * API 列表:
  *   GET    /api/health                   健康检查
+ *   GET    /api/auth/done                Access 登录完成 → 302 跳回 App（iOS）
  *   GET    /api/me                       当前用户身份（稳定 userId）
  *   GET    /api/prefs                    用户偏好（跨设备同步，当前为主题）
  *   PUT    /api/prefs                    更新用户偏好
@@ -40,6 +41,7 @@ import { handleListDevices, handleRegisterDevice, handleUpdateDevice, handleDele
 import { handlePushTest } from "./routes/push"
 import { handleClipboardList, handleClipboardCreate, handleClipboardGet, handleClipboardDelete, handleClipboardPlainCreate } from "./routes/clipboard"
 import { handleListTokens, handleCreateToken, handleRevokeToken } from "./routes/tokens"
+import { handleAuthDone } from "./routes/auth"
 import { handleFileUpload, handleFileGet } from "./routes/files"
 import { handleScheduled } from "./cron"
 
@@ -82,6 +84,11 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
   // 健康检查公开（不鉴权）
   if (p === "/api/health" && request.method === "GET") {
     return handleHealth(env)
+  }
+
+  // Access 登录完成跳转（供 iOS ASWebAuthenticationSession 回调；边缘 Access 已 gate）
+  if (p === "/api/auth/done" && request.method === "GET") {
+    return handleAuthDone()
   }
 
   // 当前用户身份（供前端派生 salt）

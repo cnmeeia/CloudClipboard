@@ -2,12 +2,15 @@
 //  SetupView.swift
 //  CloudClipboard
 //
-//  引导页：配置 Worker + API Token + 种子短语。
+//  引导页：配置 Worker + 登录 + 种子短语。
 //
-//  为什么用 API Token（见 docs/ios-audit.md §2）：
-//    Cloudflare Access 是浏览器 Cookie 流程，原生 App 无法获得 Access JWT。
-//    Worker 已支持 `Authorization: Bearer cca_...`，因此 iOS 走 API Token，
-//    且 userId 与 Web 完全一致 → E2EE 密文互通。
+//  两个登录入口（见 docs/ios-audit.md §2）：
+//    1. Cloudflare Access 登录（推荐）：系统浏览器走 Access 登录页，
+//       App 从 CF_Authorization cookie 取 JWT，以 Cf-Access-Jwt-Assertion 头调用 API。
+//       Worker 用 team JWKS 验签，userId 与 Web 端一致 → E2EE 密文互通。
+//    2. API Token（备用）：Web 端「设置 → API Token」生成，手动粘贴。
+//       注意：Worker 域名受 Cloudflare Access 保护时，Token 直连会被边缘拦截；
+//       此时 App 会自动拉起一次浏览器 Access 登录拿到会话，再用 Token 完成校验。
 //
 
 import SwiftUI
@@ -56,8 +59,8 @@ struct SetupView: View {
             .navigationBarTitleDisplayMode(.large)
             .toast($toast)
             .task {
-                // Token 已存在但缺种子短语时直接跳到第二步
-                if environment.auth.hasToken, environment.auth.userId != nil {
+                // 已有任一凭证但缺种子短语时直接跳到第二步
+                if environment.auth.hasCredentials, environment.auth.userId != nil {
                     step = .seed
                 }
             }
@@ -91,11 +94,37 @@ struct SetupView: View {
                 placeholder: SharedSettings.defaultWorkerURL,
                 text: $workerURL,
                 keyboard: .URL,
-                footnote: "默认使用现有 CloudClipboard 域名"
+                footnote: "你的 CloudClipboard Worker 域名（https 开头）"
             )
 
+            // 入口一：Cloudflare Access 登录
+            Button {
+                Task { await connectWithAccess() }
+            } label: {
+                HStack {
+                    if isBusy { ProgressView().controlSize(.small) }
+                    Image(systemName: "lock.shield")
+                    Text(isBusy ? "正在登录…" : "使用 Cloudflare Access 登录")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(isBusy)
+
+            Text("推荐：在系统浏览器中完成验证，无需手动复制令牌。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                Rectangle().frame(height: 1).foregroundStyle(.separator)
+                Text("或").font(.caption).foregroundStyle(.secondary)
+                Rectangle().frame(height: 1).foregroundStyle(.separator)
+            }
+
+            // 入口二：API Token（备用）
             LabeledField(
-                title: "访问令牌",
+                title: "访问令牌（备用）",
                 placeholder: "cca_...",
                 text: $apiToken,
                 isSecure: true,
@@ -103,15 +132,15 @@ struct SetupView: View {
             )
 
             Button {
-                Task { await connect() }
+                Task { await connectWithToken() }
             } label: {
                 HStack {
                     if isBusy { ProgressView().controlSize(.small) }
-                    Text(isBusy ? "正在验证…" : "连接")
+                    Text(isBusy ? "正在验证…" : "用令牌连接")
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.bordered)
             .controlSize(.large)
             .disabled(isBusy || apiToken.trimmingCharacters(in: .whitespaces).isEmpty)
 
@@ -129,7 +158,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text("已连接，用户 ID 已确认")
+                Text("已连接（\(environment.auth.method.displayName)），用户 ID 已确认")
                     .font(.subheadline)
             }
             .accessibilityElement(children: .combine)
@@ -168,25 +197,93 @@ struct SetupView: View {
 
     // MARK: 动作
 
-    private func connect() async {
+    /// 入口一：Access 浏览器登录
+    @MainActor
+    private func connectWithAccess() async {
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
 
-        await environment.auth.signIn(workerURL: workerURL, apiToken: apiToken)
-        await environment.refreshAPIConfiguration()
+        guard let baseURL = validatedBaseURL() else {
+            errorMessage = "服务器地址格式不正确"
+            return
+        }
 
+        do {
+            let jwt = try await AccessLoginService().signIn(baseURL: baseURL)
+            environment.auth.signInWithAccess(workerURL: workerURL, jwt: jwt)
+            await environment.refreshAPIConfiguration()
+            await environment.auth.refreshIdentity()
+        } catch let error as AccessLoginError {
+            if case .cancelled = error { return } // 用户取消，静默
+            errorMessage = error.localizedDescription
+            return
+        } catch {
+            errorMessage = "登录失败，请重试"
+            return
+        }
+
+        finishLogin()
+    }
+
+    /// 入口二：API Token；若被边缘 Access 拦截，自动补一次浏览器登录再重试
+    @MainActor
+    private func connectWithToken() async {
+        isBusy = true
+        errorMessage = nil
+        defer { isBusy = false }
+
+        environment.auth.signIn(workerURL: workerURL, apiToken: apiToken)
+        await environment.refreshAPIConfiguration()
+        await environment.auth.refreshIdentity()
+
+        if environment.auth.needsAccessLogin {
+            // Token 直连被 Cloudflare Access 拦截 → 拉起浏览器拿会话
+            guard let baseURL = validatedBaseURL() else {
+                errorMessage = "服务器地址格式不正确"
+                return
+            }
+            do {
+                let jwt = try await AccessLoginService().signIn(baseURL: baseURL)
+                environment.auth.attachAccessJwt(jwt)
+                await environment.refreshAPIConfiguration()
+                await environment.auth.refreshIdentity()
+            } catch let error as AccessLoginError {
+                if case .cancelled = error {
+                    // 保留拦截提示，让用户知道为什么连不上
+                    errorMessage = environment.auth.lastError ?? "请求被 Cloudflare Access 拦截"
+                } else {
+                    errorMessage = error.localizedDescription
+                }
+                return
+            } catch {
+                errorMessage = "登录失败，请重试"
+                return
+            }
+        }
+
+        finishLogin()
+    }
+
+    @MainActor
+    private func finishLogin() {
         switch environment.auth.state {
         case .ready, .needsSeedPhrase:
             environment.haptics.synced()
             step = .seed
         case .expired(let message):
             environment.haptics.failed()
-            errorMessage = message.isEmpty ? "访问令牌无效或已过期" : message
+            errorMessage = message.isEmpty ? "登录凭证无效或已过期" : message
         case .unconfigured:
             environment.haptics.failed()
-            errorMessage = environment.auth.lastError ?? "无法连接服务器，请检查地址与令牌"
+            errorMessage = environment.auth.lastError ?? "无法连接服务器，请检查地址与凭证"
         }
+    }
+
+    private func validatedBaseURL() -> URL? {
+        let trimmed = workerURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), url.host != nil else { return nil }
+        return url
     }
 
     private func testConnection() async {
@@ -205,6 +302,9 @@ struct SetupView: View {
                 style: .success,
                 detail: "\(health.service ?? "CloudClipboard") \(health.version ?? "")"
             )
+        } catch let error as APIError {
+            // 被 Access 拦截时给出明确指引，而不是「无法解析的数据」
+            errorMessage = error.localizedDescription
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "无法连接服务器"
         }
