@@ -29,11 +29,34 @@ jobs:
       - name: 安装 XcodeGen
         run: brew install xcodegen
 
-      - name: 生成工程并构建（无签名）
+      - name: 生成工程
         run: |
           cd apps/ios
           xcodegen generate
-          ./scripts/build-ios.sh ci
+
+      # 与 scripts/build-ios.sh ci 等价，但保留完整日志（脚本内 tail -40 会截断错误信息）
+      - name: 构建（无签名，保留完整日志）
+        run: |
+          set -o pipefail
+          cd apps/ios
+          xcodebuild -project CloudClipboard.xcodeproj \
+            -scheme CloudClipboard \
+            -configuration Debug \
+            -derivedDataPath "${PWD}/build" \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee "${GITHUB_WORKSPACE}/xcodebuild.log"
+
+      - name: 上传完整构建日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          retention-days: 7
 
       - name: 打包 IPA（Payload 结构，未签名）
         run: |

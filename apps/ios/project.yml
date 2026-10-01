@@ -110,6 +110,11 @@ targets:
       #   因此这里只共用「摘要」数据类型与共享容器定义。
       - path: CloudClipboard/Core/Storage/SharedStore.swift
         group: Shared
+      # SharedStore 引用了 ThemeMode / BiometricPolicy，Widget target 必须一并编译其定义文件
+      - path: CloudClipboard/Models/UserPrefs.swift
+        group: Shared
+      - path: CloudClipboard/Core/Security/BiometricGate.swift
+        group: Shared
     dependencies:
       # Widget 自带一份最小实现（SwiftData 缓存 + 解密），不链接 Intents，
       # 避免 Widget 进程加载不必要的 AppIntent 代码。

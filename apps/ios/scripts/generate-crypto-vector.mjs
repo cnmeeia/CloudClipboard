@@ -25,6 +25,21 @@ const PBKDF2_ITERATIONS = 310_000
 const SEED_SALT_PREFIX = "cloudclipboard:v1:"
 const ITEM_KEY_AAD = "cloudclipboard:item-key:v1"
 
+// ── 测试向量必须是确定性的 ───────────────────────────────
+// CI 用 `git diff --exit-code` 校验「脚本输出 == 已提交向量」。
+// 若每次生成都使用随机 IV/salt，该校验永远无法通过。
+// 固定 IV/salt 不影响互通测试的有效性：iOS 侧只验证「能否用给定向量解密」，
+// 向量本身是否随机与跨端互通无关（NIST 测试向量同理）。
+const FIXED_IV = Uint8Array.from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb])
+const FIXED_SALT = Uint8Array.from([0xcc, 0xdd, 0xee, 0xff, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef])
+// 条目密钥同样固定（否则每次生成的 wrappedKey / encrypted 都不同）
+const FIXED_ITEM_KEY = Uint8Array.from([
+  0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe,
+  0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+  0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+  0x0f, 0x1e, 0x2d, 0x3c, 0x4b, 0x5a, 0x69, 0x78,
+])
+
 // ── base64url ────────────────────────────────────────────
 const b64url = (bytes) =>
   Buffer.from(bytes).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
@@ -56,20 +71,20 @@ async function deriveMasterKey(seedPhrase, userId) {
 
 // ── 加密（与 packages/crypto.encryptClipboardContent 同构）──
 async function encryptClipboardContent(plaintext, masterKey) {
-  const itemKey = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, [
+  const itemKey = await crypto.subtle.importKey("raw", FIXED_ITEM_KEY.slice(), { name: "AES-GCM" }, true, [
     "encrypt",
     "decrypt",
   ])
 
-  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const iv = FIXED_IV.slice()
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv, tagLength: 128 },
     itemKey,
     new TextEncoder().encode(plaintext)
   )
 
-  const itemKeyRaw = await crypto.subtle.exportKey("raw", itemKey)
-  const salt = crypto.getRandomValues(new Uint8Array(12))
+  const itemKeyRaw = FIXED_ITEM_KEY.slice()
+  const salt = FIXED_SALT.slice()
   const wrapped = await crypto.subtle.encrypt(
     {
       name: "AES-GCM",
