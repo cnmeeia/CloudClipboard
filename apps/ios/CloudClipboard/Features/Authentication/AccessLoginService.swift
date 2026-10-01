@@ -5,13 +5,14 @@
 //  Cloudflare Access 浏览器登录：
 //    1. ASWebAuthenticationSession 打开 https://<host>/api/auth/done
 //       （该域名受 Cloudflare Access 保护）
-//    2. 用户在系统浏览器里完成 Access 登录（Passkey / 邮箱验证码 / SSO 等）
-//    3. Access 放行后，Worker 302 跳到 cloudclipboard://access-auth，
-//       会话自动关闭；若 Worker 还没部署该路由，用户手动点「完成」关闭即可
-//    4. 从共享 Cookie（CF_Authorization）取出 JWT 返回给调用方
+//    2. 用户在系统浏览器里完成 Access 登录
+//    3. Access 放行后，Worker 302 跳到 cloudclipboard://access-auth#token=<JWT>，
+//       会话自动关闭
+//    4. App 从回调 URL 的 fragment 解析出 JWT 返回给调用方
 //
-//  注意：必须用非 ephemeral 会话，Cookie 才会写入共享 HTTPCookieStorage，
-//  后续 API 请求才能自动带上它通过边缘 Access。
+//  注意：不能依赖 HTTPCookieStorage.shared 读 CF_Authorization——
+//  ASWebAuthenticationSession 的 Cookie 存在 Safari 的存储里，App 读不到。
+//  唯一的可靠通道是回调 URL（Worker 已把 JWT 放进 fragment）。
 //
 
 import AuthenticationServices
@@ -51,12 +52,16 @@ public final class AccessLoginService: NSObject {
             let session = ASWebAuthenticationSession(
                 url: loginURL,
                 callbackURLScheme: "cloudclipboard"
-            ) { [weak self] _, _ in
-                // 无论自动回调还是用户手动关闭，都以 Cookie 为准：
-                // 有 JWT 即成功，没有则视为取消/失败
+            ) { [weak self] callbackURL, _ in
+                // 优先从回调 URL 解析 JWT（Worker 已把 token 放进 fragment）；
+                // 拿不到则降级读共享 Cookie，最后才视为取消/失败
                 Task { @MainActor [weak self] in
                     self?.currentSession = nil
-                    if let jwt = Self.jwtFromSharedCookie(host: host), !jwt.isEmpty {
+                    if let url = callbackURL,
+                       let token = Self.tokenFromCallbackURL(url),
+                       !token.isEmpty {
+                        continuation.resume(returning: token)
+                    } else if let jwt = Self.jwtFromSharedCookie(host: host), !jwt.isEmpty {
                         continuation.resume(returning: jwt)
                     } else {
                         continuation.resume(throwing: AccessLoginError.cancelled)
@@ -71,7 +76,25 @@ public final class AccessLoginService: NSObject {
         }
     }
 
+    /// 从回调 URL 解析 JWT：
+    /// cloudclipboard://access-auth#token=<jwt>（优先，fragment 不进服务器日志）
+    /// 或 cloudclipboard://access-auth?token=<jwt>（兼容）
+    private static func tokenFromCallbackURL(_ url: URL) -> String? {
+        if let fragment = url.fragment, !fragment.isEmpty {
+            var comps = URLComponents()
+            comps.query = fragment
+            if let token = comps.queryItems?.first(where: { $0.name == "token" })?.value,
+               !token.isEmpty {
+                return token
+            }
+        }
+        return URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "token" })?.value
+    }
+
     /// 从共享 Cookie 读取 CF_Authorization（即 Access JWT）
+    /// 注意：ASWebAuthenticationSession 的 Cookie 在 Safari 存储里，
+    /// 这里大概率读不到，仅作降级兜底。
     public static func jwtFromSharedCookie(host: String) -> String? {
         guard let url = URL(string: "https://\(host)") else { return nil }
         let cookies = HTTPCookieStorage.shared.cookies(for: url) ?? []
