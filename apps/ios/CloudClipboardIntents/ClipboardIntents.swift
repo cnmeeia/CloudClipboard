@@ -91,7 +91,7 @@ public struct SaveClipboardIntent: AppIntent {
         }
         SharedCommandBridge.shared.enqueue(.save(content: payload))
         let ok = await ClipboardIntentWorker.shared.save(content: payload)
-        return .result(dialog: ok ? "已保存到 CloudClipboard。" : "已保存到本地，联网后会自动上传。")
+        return .result(dialog: IntentDialog(ok ? "已保存到 CloudClipboard。" : "已保存到本地，联网后会自动上传。"))
     }
 }
 
@@ -204,7 +204,7 @@ public struct DeleteClipboardIntent: AppIntent {
     public func perform() async throws -> some IntentResult & ProvidesDialog {
         SharedCommandBridge.shared.enqueue(.delete(id: target.id))
         let ok = await ClipboardIntentWorker.shared.delete(id: target.id)
-        return .result(dialog: ok ? "已删除。" : "已标记删除，联网后生效。")
+        return .result(dialog: IntentDialog(ok ? "已删除。" : "已标记删除，联网后生效。"))
     }
 }
 
