@@ -14,7 +14,7 @@
 
 import Foundation
 
-public enum AppRoute: Equatable, Sendable {
+public enum AppRoute: Equatable, Hashable, Sendable {
     case clipboardList
     case clipboardDetail(id: String)
     case search(query: String?)
