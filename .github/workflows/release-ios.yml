@@ -70,14 +70,27 @@ jobs:
           (cd ipa && zip -qry ../CloudClipboard-unsigned.ipa Payload)
           ls -lh CloudClipboard-unsigned.ipa
 
-      - name: 创建 GitHub Release 并上传 IPA
+      - name: 创建 GitHub Release 并上传 IPA（tag 自动递增）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ios-v1.0.0
         run: |
           set -euo pipefail
-          gh release delete "$TAG" -y 2>/dev/null || true
+          # 取远端最大的 ios-vX.Y.Z，patch 自动 +1；没有则从 v1.0.0 开始
+          LATEST=$(git ls-remote --tags origin \
+            | awk '{print $2}' \
+            | grep -E '^refs/tags/ios-v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sed 's|refs/tags/||' \
+            | sort -V | tail -1)
+          if [ -z "$LATEST" ]; then
+            TAG="ios-v1.0.0"
+          else
+            V=${LATEST#ios-v}
+            TAG="ios-v${V%.*}.$((10#${V##*.} + 1))"
+          fi
+          echo "发布 tag：$TAG（上一个：${LATEST:-无}）"
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
           gh release create "$TAG" CloudClipboard-unsigned.ipa \
-            --title "CloudClipboard iOS v1.0.0（未签名）" \
+            --title "CloudClipboard iOS ${TAG#ios-}（未签名）" \
             --notes-file .github/release-notes-ios.md
           echo "Release 已创建：$(gh release view "$TAG" --json url -q .url)"
