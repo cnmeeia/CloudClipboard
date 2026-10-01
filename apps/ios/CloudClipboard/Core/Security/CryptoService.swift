@@ -128,9 +128,11 @@ public struct CryptoService: CryptoServiceProtocol {
         }
         guard status == kCCSuccess else { throw CryptoError.keyDerivationFailed }
 
-        // 用完立即清零派生字节（降低内存中被 dump 的风险）
+        // 先把派生结果拷进 SymmetricKey，再清零临时 buffer。
+        // 注意顺序：清零必须在拷贝之后，否则返回的全是 0 字节 key。
+        let key = SymmetricKey(data: Data(derived))
         for index in derived.indices { derived[index] = 0 }
-        return SymmetricKey(data: Data(derived))
+        return key
     }
 
     // MARK: 加密

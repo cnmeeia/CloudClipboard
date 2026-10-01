@@ -83,7 +83,9 @@ final class APIClientTests: XCTestCase {
         URLProtocolStub.handler = { request in
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-            let json = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+            // URLSession 发送前会把 httpBody 转成 httpBodyStream，
+            // stub 里必须两边都读，否则 body 是空的。
+            let json = try JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: Any]
             XCTAssertEqual(json?["encrypted_data"] as? String, "abc")
             XCTAssertEqual(json?["wrapped_key"] as? String, "wrap")
             XCTAssertEqual(json?["type"] as? String, "text")
@@ -334,4 +336,24 @@ final class URLProtocolStub: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+/// URLSession 在发送前会把 `httpBody` 转成 `httpBodyStream`，
+/// 自定义 URLProtocol 收到的请求里 `httpBody` 常为 nil，
+/// 读 body 时必须两边都尝试。
+extension APIClientTests {
+    static func bodyData(from request: URLRequest) -> Data {
+        if let body = request.httpBody, !body.isEmpty { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return data
+    }
 }
