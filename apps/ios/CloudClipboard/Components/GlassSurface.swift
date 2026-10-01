@@ -29,6 +29,10 @@ struct GlassSurface<Content: View>: View {
 
     @ViewBuilder
     private var glassBackground: some View {
+        // glassEffect 是 iOS 26 SDK（Xcode 26 / Swift 6.2+）才有的 API；
+        // #available 只能做运行时判断，编译期仍需要 SDK 里有这个符号，
+        // 所以用 #if compiler(>=6.2) 做编译期隔离。
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             // iOS 26+：使用系统 Liquid Glass 材质（官方 API，非自绘）
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -44,20 +48,28 @@ struct GlassSurface<Content: View>: View {
                     }
                 }
         } else {
-            // iOS 17–25：系统 Material 回退（同样由系统渲染，非假玻璃）
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-                }
-                .overlay {
-                    if let tint {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(tint.opacity(0.10))
-                    }
-                }
+            materialFallback
         }
+        #else
+        materialFallback
+        #endif
+    }
+
+    @ViewBuilder
+    private var materialFallback: some View {
+        // iOS 17–25：系统 Material 回退（同样由系统渲染，非假玻璃）
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+            }
+            .overlay {
+                if let tint {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(tint.opacity(0.10))
+                }
+            }
     }
 }
 
