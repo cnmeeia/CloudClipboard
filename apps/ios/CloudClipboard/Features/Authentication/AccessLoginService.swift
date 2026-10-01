@@ -81,7 +81,7 @@ public final class AccessLoginService: NSObject {
 
 // MARK: - 弹窗锚点
 
-extension AccessLoginService: ASWebAuthenticationSessionPresentationContextProviding {
+extension AccessLoginService: ASWebAuthenticationPresentationContextProviding {
     public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         // 系统总是在主线程回调这里
         MainActor.assumeIsolated {
