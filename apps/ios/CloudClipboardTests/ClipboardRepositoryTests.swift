@@ -21,7 +21,7 @@ final class ClipboardRepositoryTests: XCTestCase {
     private let seed = "test seed phrase for cloudclipboard"
 
     override func setUp() async throws {
-        super.setUp()
+        try await super.setUp()
         container = try ModelContainerFactory.makeInMemory()
         keychain = InMemoryKeychain()
         crypto = CryptoService()
@@ -45,7 +45,7 @@ final class ClipboardRepositoryTests: XCTestCase {
         keychain = nil
         auth = nil
         devices = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeRepository(api: FakeAPIClientProtocol) -> ClipboardRepository {
