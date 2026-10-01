@@ -1,45 +1,190 @@
 name: iOS Release（未签名 IPA）
 
-# 推送到 release-ios 分支（或手动触发）时：
-# 在 macOS runner 上无签名构建 iOS App，打包为 IPA 并创建 GitHub Release。
+# ============================================================
+# CloudClipboard iOS
 #
-# 注意：产物为未签名 IPA，仅用于验证构建流程，不可安装到真机。
-# 需要可安装版本时，请按 apps/ios/README.md 接入签名后重新触发。
+# release-ios 分支：
+#   1. XcodeGen 生成 Xcode 工程
+#   2. Debug / iphoneos / 无签名构建
+#   3. 打包 Payload/*.app → IPA
+#   4. SHA-256
+#   5. 自动生成 ios-vX.Y.Z Tag
+#   6. 创建 GitHub Release
+#   7. 上传 IPA + SHA256
+#
+# 注意：
+#   该 IPA 未签名，仅用于验证构建流程。
+#   无法直接安装到正常 iPhone 真机。
+# ============================================================
 
 on:
   push:
-    branches: ["release-ios"]
+    branches:
+      - release-ios
+
   workflow_dispatch:
 
+# GitHub Actions 需要：
+# - 创建 Tag
+# - 创建 Release
+# - 上传 Release Assets
 permissions:
   contents: write
 
+# 防止两个 Workflow 同时发布相同版本
+concurrency:
+  group: cloudclipboard-ios-release
+  cancel-in-progress: false
+
+
 jobs:
   build-and-release:
-    name: 构建未签名 IPA 并发布
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: 选择 Xcode
+    name: 构建未签名 IPA 并发布
+
+    runs-on: macos-15
+
+    timeout-minutes: 30
+
+    steps:
+
+      # ======================================================
+      # 1. Checkout
+      # ======================================================
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+
+      # ======================================================
+      # 2. 显示环境
+      # ======================================================
+      - name: 检查构建环境
         run: |
-          sudo xcode-select -s /Applications/Xcode.app
+          set -euo pipefail
+
+          echo "========================================"
+          echo "macOS"
+          echo "========================================"
+          sw_vers
+
+          echo
+          echo "========================================"
+          echo "Xcode"
+          echo "========================================"
           xcodebuild -version
 
-      - name: 安装 XcodeGen
-        run: brew install xcodegen
+          echo
+          echo "========================================"
+          echo "Swift"
+          echo "========================================"
+          swift --version
 
-      - name: 生成工程
+          echo
+          echo "========================================"
+          echo "Git"
+          echo "========================================"
+          git --version
+
+          echo
+          echo "========================================"
+          echo "Commit"
+          echo "========================================"
+          git rev-parse HEAD
+
+
+      # ======================================================
+      # 3. 选择 Xcode
+      # ======================================================
+      - name: 选择 Xcode
         run: |
-          cd apps/ios
+          set -euo pipefail
+
+          sudo xcode-select -s /Applications/Xcode.app
+
+          echo "Xcode:"
+          xcodebuild -version
+
+          echo
+          echo "Developer Directory:"
+          xcode-select -p
+
+
+      # ======================================================
+      # 4. 安装 XcodeGen
+      #
+      # 如果项目已经有固定版本，可以把这里改成：
+      #
+      # brew install xcodegen
+      #
+      # 当前保持 Homebrew 最新版本。
+      # ======================================================
+      - name: 安装 XcodeGen
+        run: |
+          set -euo pipefail
+
+          if command -v xcodegen >/dev/null 2>&1; then
+            echo "XcodeGen 已存在"
+          else
+            brew install xcodegen
+          fi
+
+          xcodegen version
+
+
+      # ======================================================
+      # 5. 生成 Xcode 工程
+      # ======================================================
+      - name: 生成 Xcode 工程
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+
+          echo "生成 CloudClipboard.xcodeproj..."
+
           xcodegen generate
 
-      # 与 scripts/build-ios.sh ci 等价，但保留完整日志（脚本内 tail -40 会截断错误信息）
-      - name: 构建（无签名，保留完整日志）
+          test -d CloudClipboard.xcodeproj
+
+          echo
+          echo "生成成功："
+          ls -lah CloudClipboard.xcodeproj
+
+
+      # ======================================================
+      # 6. 清理构建目录
+      # ======================================================
+      - name: 清理构建目录
+        run: |
+          set -euo pipefail
+
+          rm -rf apps/ios/build
+          rm -rf ipa
+
+          mkdir -p apps/ios/build
+
+
+      # ======================================================
+      # 7. 构建 iOS App
+      #
+      # 不签名：
+      # CODE_SIGNING_ALLOWED=NO
+      # CODE_SIGNING_REQUIRED=NO
+      # CODE_SIGN_IDENTITY=""
+      # ======================================================
+      - name: 构建 iOS App（无签名）
+        working-directory: apps/ios
         run: |
           set -o pipefail
-          cd apps/ios
-          xcodebuild -project CloudClipboard.xcodeproj \
+
+          echo "========================================"
+          echo "开始 xcodebuild"
+          echo "========================================"
+
+          xcodebuild \
+            -project CloudClipboard.xcodeproj \
             -scheme CloudClipboard \
             -configuration Debug \
             -derivedDataPath "${PWD}/build" \
@@ -48,49 +193,349 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build 2>&1 | tee "${GITHUB_WORKSPACE}/xcodebuild.log"
+            build \
+            2>&1 | tee "${GITHUB_WORKSPACE}/xcodebuild.log"
 
-      - name: 上传完整构建日志（失败时）
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcodebuild-log
-          path: xcodebuild.log
-          retention-days: 7
 
-      - name: 打包 IPA（Payload 结构，未签名）
+      # ======================================================
+      # 8. 查找 .app
+      # ======================================================
+      - name: 检查 App 产物
         run: |
           set -euo pipefail
+
           APP_DIR="apps/ios/build/Build/Products/Debug-iphoneos"
-          APP="$(find "$APP_DIR" -maxdepth 1 -name '*.app' | head -1)"
-          test -n "$APP" || { echo "::error::未找到 .app 产物"; exit 1; }
-          echo "使用产物：$APP"
-          rm -rf ipa && mkdir -p ipa/Payload
+
+          echo "产物目录："
+          ls -lah "$APP_DIR"
+
+          APP="$(find "$APP_DIR" \
+            -maxdepth 1 \
+            -type d \
+            -name '*.app' \
+            | head -1)"
+
+          if [ -z "$APP" ]; then
+            echo "::error::未找到 .app 产物"
+            exit 1
+          fi
+
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+          echo
+          echo "App:"
+          echo "$APP"
+
+
+      # ======================================================
+      # 9. 检查 Info.plist
+      # ======================================================
+      - name: 检查 App 信息
+        run: |
+          set -euo pipefail
+
+          PLIST="$APP/Info.plist"
+
+          test -f "$PLIST"
+
+          echo "========================================"
+          echo "Bundle Identifier"
+          echo "========================================"
+
+          BUNDLE_ID=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :CFBundleIdentifier" \
+              "$PLIST"
+          )
+
+          echo "$BUNDLE_ID"
+
+          echo
+          echo "========================================"
+          echo "App Version"
+          echo "========================================"
+
+          SHORT_VERSION=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :CFBundleShortVersionString" \
+              "$PLIST" \
+              2>/dev/null || echo "unknown"
+          )
+
+          BUILD_VERSION=$(
+            /usr/libexec/PlistBuddy \
+              -c "Print :CFBundleVersion" \
+              "$PLIST" \
+              2>/dev/null || echo "unknown"
+          )
+
+          echo "版本: $SHORT_VERSION"
+          echo "Build: $BUILD_VERSION"
+
+
+      # ======================================================
+      # 10. 打包 IPA
+      #
+      # IPA 本质：
+      #
+      # Payload/
+      #   CloudClipboard.app
+      # ======================================================
+      - name: 打包 IPA（未签名）
+        run: |
+          set -euo pipefail
+
+          rm -rf ipa
+          mkdir -p ipa/Payload
+
+          echo "复制 App..."
+
           cp -R "$APP" ipa/Payload/
-          (cd ipa && zip -qry ../CloudClipboard-unsigned.ipa Payload)
+
+          echo
+          echo "Payload："
+          find ipa/Payload -maxdepth 1 -print
+
+          echo
+          echo "打包 IPA..."
+
+          (
+            cd ipa
+            ditto -c -k --sequesterRsrc --keepParent \
+              Payload \
+              ../CloudClipboard-unsigned.ipa
+          )
+
+          test -f CloudClipboard-unsigned.ipa
+
+          echo
+          echo "IPA："
           ls -lh CloudClipboard-unsigned.ipa
 
-      - name: 创建 GitHub Release 并上传 IPA（tag 自动递增）
+
+      # ======================================================
+      # 11. SHA-256
+      # ======================================================
+      - name: 计算 IPA SHA-256
+        run: |
+          set -euo pipefail
+
+          shasum -a 256 \
+            CloudClipboard-unsigned.ipa \
+            | tee CloudClipboard-unsigned.ipa.sha256
+
+          echo
+          echo "SHA-256："
+          cat CloudClipboard-unsigned.ipa.sha256
+
+
+      # ======================================================
+      # 12. 生成构建信息
+      # ======================================================
+      - name: 生成构建信息
+        run: |
+          set -euo pipefail
+
+          {
+            echo "CloudClipboard iOS"
+            echo
+            echo "Commit: $(git rev-parse HEAD)"
+            echo "Branch: ${GITHUB_REF_NAME}"
+            echo "Run: ${GITHUB_RUN_ID}"
+            echo "Runner: ${RUNNER_OS}"
+            echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+            echo
+            echo "IPA SHA-256:"
+            cat CloudClipboard-unsigned.ipa.sha256
+          } > build-info.txt
+
+          cat build-info.txt
+
+
+      # ======================================================
+      # 13. 上传构建日志
+      #
+      # 无论成功/失败都保留
+      # ======================================================
+      - name: 上传构建日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log-${{ github.run_number }}
+          path: |
+            xcodebuild.log
+            build-info.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+
+      # ======================================================
+      # 14. 自动生成 Release Tag
+      # ======================================================
+      - name: 计算 Release Tag
+        id: version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # 取远端最大的 ios-vX.Y.Z，patch 自动 +1；没有则从 v1.0.0 开始
-          LATEST=$(git ls-remote --tags origin \
-            | awk '{print $2}' \
-            | grep -E '^refs/tags/ios-v[0-9]+\.[0-9]+\.[0-9]+$' \
-            | sed 's|refs/tags/||' \
-            | sort -V | tail -1 || true)
+
+          echo "========================================"
+          echo "查找最新 ios-vX.Y.Z"
+          echo "========================================"
+
+          git fetch --tags --force origin
+
+          LATEST=$(
+            git tag -l 'ios-v*' \
+              | grep -E '^ios-v[0-9]+\.[0-9]+\.[0-9]+$' \
+              | sort -V \
+              | tail -n 1 \
+              || true
+          )
+
           if [ -z "$LATEST" ]; then
             TAG="ios-v1.0.0"
           else
-            V=${LATEST#ios-v}
-            TAG="ios-v${V%.*}.$((10#${V##*.} + 1))"
+            VERSION="${LATEST#ios-v}"
+
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+            PATCH=$((10#$PATCH + 1))
+
+            TAG="ios-v${MAJOR}.${MINOR}.${PATCH}"
           fi
-          echo "发布 tag：$TAG（上一个：${LATEST:-无}）"
-          git tag "$TAG"
-          git push origin "refs/tags/$TAG"
-          gh release create "$TAG" CloudClipboard-unsigned.ipa \
+
+          echo "LATEST=$LATEST"
+          echo "TAG=$TAG"
+
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+
+      # ======================================================
+      # 15. 创建 Tag
+      # ======================================================
+      - name: 创建 Release Tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          echo "准备发布：$TAG"
+
+          # 再检查一次远端
+          if git ls-remote \
+            --exit-code \
+            --tags \
+            origin \
+            "refs/tags/$TAG" \
+            >/dev/null 2>&1; then
+
+            echo "::error::Tag $TAG 已经存在"
+
+            exit 1
+          fi
+
+          # Annotated Tag
+          git tag \
+            -a "$TAG" \
+            -m "CloudClipboard iOS $TAG"
+
+          git push origin "$TAG"
+
+          echo "Tag 已推送：$TAG"
+
+
+      # ======================================================
+      # 16. 生成 Release Notes
+      # ======================================================
+      - name: 生成 Release Notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          LATEST: ${{ steps.version.outputs.latest }}
+        run: |
+          set -euo pipefail
+
+          NOTES=".github/release-notes-ios.md"
+
+          if [ -f "$NOTES" ]; then
+            cp "$NOTES" release-notes.md
+          else
+            cat > release-notes.md <<'EOF'
+          ## CloudClipboard iOS
+
+          未签名 IPA，仅用于构建验证。
+          EOF
+          fi
+
+          cat >> release-notes.md <<EOF
+
+          ---
+
+          ### Build Information
+
+          - Tag: \`$TAG\`
+          - Previous Tag: \`${LATEST:-无}\`
+          - Commit: \`$(git rev-parse HEAD)\`
+          - Branch: \`${GITHUB_REF_NAME}\`
+          - GitHub Actions Run: \`${GITHUB_RUN_NUMBER}\`
+
+          ### IPA
+
+          \`CloudClipboard-unsigned.ipa\`
+
+          ### SHA-256
+
+          \`\`\`
+          $(cat CloudClipboard-unsigned.ipa.sha256)
+          \`\`\`
+
+          > ⚠️ 此 IPA 未签名，仅用于验证构建流程，不能直接正常安装到真机。
+          EOF
+
+          echo "========================================"
+          cat release-notes.md
+          echo "========================================"
+
+
+      # ======================================================
+      # 17. 创建 GitHub Release
+      # ======================================================
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          echo "创建 Release：$TAG"
+
+          gh release create "$TAG" \
+            CloudClipboard-unsigned.ipa \
+            CloudClipboard-unsigned.ipa.sha256 \
             --title "CloudClipboard iOS ${TAG#ios-}（未签名）" \
-            --notes-file .github/release-notes-ios.md
-          echo "Release 已创建：$(gh release view "$TAG" --json url -q .url)"
+            --notes-file release-notes.md \
+            --verify-tag
+
+          RELEASE_URL=$(
+            gh release view "$TAG" \
+              --json url \
+              --jq '.url'
+          )
+
+          echo
+          echo "========================================"
+          echo "✅ CloudClipboard iOS Release 成功"
+          echo "========================================"
+          echo "🏷️ Tag:"
+          echo "$TAG"
+          echo
+          echo "📦 IPA:"
+          echo "CloudClipboard-unsigned.ipa"
+          echo
+          echo "🔐 SHA-256:"
+          cat CloudClipboard-unsigned.ipa.sha256
+          echo
+          echo "🔗 Release:"
+          echo "$RELEASE_URL"
+          echo "========================================"
