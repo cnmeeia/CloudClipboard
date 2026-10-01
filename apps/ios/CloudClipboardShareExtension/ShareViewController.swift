@@ -99,7 +99,7 @@ final class ShareViewController: UIViewController {
             return
         }
 
-        detailLabel.text = payloads.map(\.summary).joined(separator: "\n")
+        detailLabel.text = payloads.map(\.kind.summary).joined(separator: "\n")
         statusLabel.text = "正在加密并上传…"
 
         var successCount = 0
