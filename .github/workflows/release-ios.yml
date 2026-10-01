@@ -80,7 +80,7 @@ jobs:
             | awk '{print $2}' \
             | grep -E '^refs/tags/ios-v[0-9]+\.[0-9]+\.[0-9]+$' \
             | sed 's|refs/tags/||' \
-            | sort -V | tail -1)
+            | sort -V | tail -1 || true)
           if [ -z "$LATEST" ]; then
             TAG="ios-v1.0.0"
           else
