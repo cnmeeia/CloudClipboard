@@ -37,6 +37,10 @@ final class ClipboardRepositoryTests: XCTestCase {
             keychain: keychain,
             crypto: crypto
         )
+        // flushOutbox 等同步路径要求 auth.state.isReady；
+        // fixture 里走一次 bootstrap，让状态进入 .ready。
+        // FakeAPIClient 的 /api/me 返回的 userId 与 keychain 一致，不会触发换账号清理。
+        await auth.bootstrap()
         devices = DeviceRepository(apiClient: FakeAPIClient(), keychain: keychain)
     }
 
