@@ -8,6 +8,7 @@
 import XCTest
 @testable import CloudClipboard
 
+@MainActor
 final class DeepLinkTests: XCTestCase {
 
     // MARK: Custom URL Scheme
