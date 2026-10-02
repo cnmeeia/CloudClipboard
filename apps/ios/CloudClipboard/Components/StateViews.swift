@@ -73,15 +73,22 @@ struct EmptyStateView: View {
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
 
+    @State private var appeared = false
+
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             Image(systemName: systemImage)
-                .font(.system(size: 44, weight: .regular))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 84, height: 84)
+                .background {
+                    GlassSurface(cornerRadius: 24) { Color.clear }
+                }
                 .accessibilityHidden(true)
+                .scaleEffect(appeared ? 1 : 0.8)
 
             Text(title)
-                .font(.headline)
+                .font(.system(.headline, design: .rounded))
                 .multilineTextAlignment(.center)
 
             Text(message)
@@ -94,10 +101,16 @@ struct EmptyStateView: View {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+                    .clipShape(Capsule())
             }
         }
         .padding(32)
         .frame(maxWidth: 420)
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 12)
+        .onAppear {
+            withAnimation(Motion.hero.delay(0.1)) { appeared = true }
+        }
         .accessibilityElement(children: .combine)
     }
 }
@@ -109,10 +122,14 @@ struct ErrorStateView: View {
     var retry: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 40))
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 32, weight: .medium))
                 .foregroundStyle(.orange)
+                .frame(width: 80, height: 80)
+                .background {
+                    GlassSurface(cornerRadius: 24) { Color.clear }
+                }
                 .accessibilityHidden(true)
 
             Text(message)
@@ -122,9 +139,11 @@ struct ErrorStateView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if let retry {
-                Button("重试", action: retry)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
+                Button(action: retry) {
+                    Label("重试", systemImage: "arrow.clockwise")
+                }
+                .adaptiveGlassButton()
+                .controlSize(.large)
             }
         }
         .padding(32)

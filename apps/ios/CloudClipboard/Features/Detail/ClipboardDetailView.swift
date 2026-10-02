@@ -19,6 +19,7 @@ struct ClipboardDetailView: View {
     @State private var errorMessage: String?
     @State private var toast: ToastMessage?
     @State private var isConfirmingDelete = false
+    @State private var contentAppeared = false
 
     var body: some View {
         ScrollView {
@@ -31,10 +32,15 @@ struct ClipboardDetailView: View {
                     }
                 } else if let detail {
                     contentSection(detail)
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 16)
                     metadataSection(detail)
+                        .opacity(contentAppeared ? 1 : 0)
+                        .offset(y: contentAppeared ? 0 : 16)
                 }
             }
             .padding(16)
+            .animation(Motion.page.delay(0.05), value: contentAppeared)
         }
         .navigationTitle("详情")
         .navigationBarTitleDisplayMode(.inline)
@@ -168,6 +174,9 @@ struct ClipboardDetailView: View {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "加载失败"
         }
         isLoading = false
+        contentAppeared = false
+        try? await Task.sleep(for: .milliseconds(60))
+        withAnimation(Motion.page) { contentAppeared = true }
     }
 
     /// 图片内容：`GET /api/clipboard/:id` 会把 R2 对象以 base64 返回。

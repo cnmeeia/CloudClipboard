@@ -4,13 +4,11 @@
 //
 //  引导页：配置 Worker + 登录 + 种子短语。
 //
-//  两个登录入口（见 docs/ios-audit.md §2）：
+//  两个登录入口：
 //    1. Cloudflare Access 登录（推荐）：系统浏览器走 Access 登录页，
-//       App 从 CF_Authorization cookie 取 JWT，以 Cf-Access-Jwt-Assertion 头调用 API。
-//       Worker 用 team JWKS 验签，userId 与 Web 端一致 → E2EE 密文互通。
+//       回调带回 JWT，以 Cf-Access-Jwt-Assertion 头调用 API。
 //    2. API Token（备用）：Web 端「设置 → API Token」生成，手动粘贴。
-//       注意：Worker 域名受 Cloudflare Access 保护时，Token 直连会被边缘拦截；
-//       此时 App 会自动拉起一次浏览器 Access 登录拿到会话，再用 Token 完成校验。
+//       Worker 域名受 Access 保护时，App 会自动拉起一次浏览器登录再重试。
 //
 
 import SwiftUI
@@ -25,6 +23,7 @@ struct SetupView: View {
     @State private var isBusy = false
     @State private var errorMessage: String?
     @State private var toast: ToastMessage?
+    @State private var headerAppeared = false
 
     enum Step: Int, CaseIterable {
         case server, seed
@@ -40,55 +39,95 @@ struct SetupView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 24) {
                     header
+                        .opacity(headerAppeared ? 1 : 0)
+                        .offset(y: headerAppeared ? 0 : 16)
 
-                    switch step {
-                    case .server: serverStep
-                    case .seed: seedStep
+                    GlassSurface(cornerRadius: 28) {
+                        stepContent
+                            .padding(22)
                     }
+                    .id(step)
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .trailing).combined(with: .offset(y: 12))),
+                            removal: .opacity.combined(with: .move(edge: .leading))
+                        )
+                    )
+                    .animation(Motion.page, value: step)
 
                     if let errorMessage {
                         InlineErrorView(message: errorMessage)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                 }
                 .padding(20)
+                .padding(.bottom, 24)
             }
-            .background(AppBackground())
+            .scrollBounceBehavior(.basedOnSize)
             .navigationTitle("CloudClipboard")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toast($toast)
             .task {
+                withAnimation(Motion.hero.delay(0.1)) { headerAppeared = true }
                 // 已有任一凭证但缺种子短语时直接跳到第二步
                 if environment.auth.hasCredentials, environment.auth.userId != nil {
                     step = .seed
                 }
             }
+            .animation(Motion.spring, value: errorMessage)
         }
     }
 
     // MARK: 头部
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: "doc.on.clipboard.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(Color.accentColor)
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.18))
+                    .frame(width: 72, height: 72)
+                    .blur(radius: 2)
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(radius: 8)
+            }
+            .overlay {
+                // 光环缓慢呼吸
+                Circle()
+                    .strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1.5)
+                    .frame(width: 84, height: 84)
+                    .scaleEffect(headerAppeared ? 1 : 0.85)
+                    .opacity(headerAppeared ? 0.6 : 0)
+                    .animation(.easeOut(duration: 2.2).repeatForever(autoreverses: true), value: headerAppeared)
+            }
+            .accessibilityHidden(true)
 
             Text("跨设备私有剪贴板")
-                .font(.title2.weight(.bold))
-            Text("端到端加密，服务器永远看不到明文。复用你现有的 CloudClipboard 云端。")
+                .font(.system(.title2, design: .rounded).weight(.bold))
+                .tracking(-0.02)
+            Text("端到端加密，服务器永远看不到明文。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: 第一步
+    // MARK: 步骤内容
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .server: serverStep
+        case .seed: seedStep
+        }
+    }
 
     private var serverStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
+            stepIndicator
+
             LabeledField(
                 title: "服务器地址",
                 placeholder: SharedSettings.defaultWorkerURL,
@@ -101,24 +140,25 @@ struct SetupView: View {
             Button {
                 Task { await connectWithAccess() }
             } label: {
-                HStack {
-                    if isBusy { ProgressView().controlSize(.small) }
-                    Image(systemName: "lock.shield")
+                HStack(spacing: 8) {
+                    if isBusy {
+                        ProgressView().controlSize(.small).tint(.white)
+                    } else {
+                        Image(systemName: "lock.shield")
+                    }
                     Text(isBusy ? "正在登录…" : "使用 Cloudflare Access 登录")
+                        .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .clipShape(Capsule())
             .disabled(isBusy)
 
-            Text("推荐：在系统浏览器中完成验证，无需手动复制令牌。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Rectangle().frame(height: 1).foregroundStyle(.separator)
-                Text("或").font(.caption).foregroundStyle(.secondary)
+                Text("或").font(.caption2).foregroundStyle(.secondary)
                 Rectangle().frame(height: 1).foregroundStyle(.separator)
             }
 
@@ -128,19 +168,20 @@ struct SetupView: View {
                 placeholder: "cca_...",
                 text: $apiToken,
                 isSecure: true,
-                footnote: "在 Web 端「设置 → API Token」生成，复制到这里"
+                footnote: "在 Web 端「设置 → API Token」生成"
             )
 
             Button {
                 Task { await connectWithToken() }
             } label: {
-                HStack {
+                HStack(spacing: 8) {
                     if isBusy { ProgressView().controlSize(.small) }
                     Text(isBusy ? "正在验证…" : "用令牌连接")
+                        .fontWeight(.medium)
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.bordered)
+            .adaptiveGlassButton()
             .controlSize(.large)
             .disabled(isBusy || apiToken.trimmingCharacters(in: .whitespaces).isEmpty)
 
@@ -148,20 +189,21 @@ struct SetupView: View {
                 Task { await testConnection() }
             }
             .font(.footnote)
+            .foregroundStyle(.secondary)
             .disabled(isBusy)
         }
     }
 
-    // MARK: 第二步
-
     private var seedStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                Text("已连接（\(environment.auth.method.displayName)），用户 ID 已确认")
-                    .font(.subheadline)
+        VStack(alignment: .leading, spacing: 18) {
+            stepIndicator
+
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                Text("已连接（\(environment.auth.method.displayName)）")
+                    .font(.subheadline.weight(.medium))
             }
-            .accessibilityElement(children: .combine)
 
             LabeledField(
                 title: "种子短语",
@@ -175,23 +217,50 @@ struct SetupView: View {
                 unlock()
             } label: {
                 Text("解锁并进入")
+                    .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .clipShape(Capsule())
             .disabled(seedPhrase.trimmingCharacters(in: .whitespaces).count < 8)
 
             Text("种子短语错误会导致无法解密历史记录，请与 Web 端保持一致。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Button("换一个账号") {
+            Button {
                 environment.auth.signOut()
-                step = .server
+                withAnimation(Motion.page) { step = .server }
                 apiToken = ""
                 seedPhrase = ""
+            } label: {
+                Label("换一个账号", systemImage: "arrow.left")
+                    .font(.footnote)
             }
-            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// 顶部步骤指示器（两个圆点 + 连线）
+    private var stepIndicator: some View {
+        HStack(spacing: 8) {
+            ForEach(Step.allCases, id: \.self) { s in
+                let active = s == step
+                Circle()
+                    .fill(active ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .frame(width: 8, height: 8)
+                    .animation(Motion.quick, value: step)
+                if s == .server {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(step == .seed ? 0.4 : 0.2))
+                        .frame(width: 32, height: 1.5)
+                }
+            }
+            Spacer(minLength: 0)
+            Text(step.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -215,7 +284,7 @@ struct SetupView: View {
             await environment.refreshAPIConfiguration()
             await environment.auth.refreshIdentity()
         } catch let error as AccessLoginError {
-            if case .cancelled = error { return } // 用户取消，静默
+            if case .cancelled = error { return }
             errorMessage = error.localizedDescription
             return
         } catch {
@@ -238,7 +307,6 @@ struct SetupView: View {
         await environment.auth.refreshIdentity()
 
         if environment.auth.needsAccessLogin {
-            // Token 直连被 Cloudflare Access 拦截 → 拉起浏览器拿会话
             guard let baseURL = validatedBaseURL() else {
                 errorMessage = "服务器地址格式不正确"
                 return
@@ -250,10 +318,10 @@ struct SetupView: View {
                 await environment.auth.refreshIdentity()
             } catch let error as AccessLoginError {
                 if case .cancelled = error {
-                    // 保留拦截提示，让用户知道为什么连不上
                     errorMessage = environment.auth.lastError ?? "请求被 Cloudflare Access 拦截"
                 } else {
                     errorMessage = error.localizedDescription
+
                 }
                 return
             } catch {
@@ -270,7 +338,7 @@ struct SetupView: View {
         switch environment.auth.state {
         case .ready, .needsSeedPhrase:
             environment.haptics.synced()
-            step = .seed
+            withAnimation(Motion.page) { step = .seed }
         case .expired(let message):
             environment.haptics.failed()
             errorMessage = message.isEmpty ? "登录凭证无效或已过期" : message
@@ -303,7 +371,6 @@ struct SetupView: View {
                 detail: "\(health.service ?? "CloudClipboard") \(health.version ?? "")"
             )
         } catch let error as APIError {
-            // 被 Access 拦截时给出明确指引，而不是「无法解析的数据」
             errorMessage = error.localizedDescription
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? "无法连接服务器"
@@ -332,9 +399,9 @@ struct LabeledField: View {
     var footnote: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.footnote.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             Group {
@@ -347,9 +414,17 @@ struct LabeledField: View {
                         .autocorrectionDisabled()
                 }
             }
+            .font(.body)
             .textFieldStyle(.plain)
-            .padding(12)
-            .background { GlassSurface(cornerRadius: 12) { Color.clear } }
+            .padding(14)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.primary.opacity(0.05))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.6)
+                    }
+            }
             .accessibilityLabel(title)
 
             if let footnote {
@@ -365,18 +440,26 @@ struct InlineErrorView: View {
     let message: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
+                .font(.footnote)
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
             Text(message)
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.orange.opacity(0.95))
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.orange.opacity(0.12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.orange.opacity(0.25), lineWidth: 0.6)
+                }
+        }
         .accessibilityElement(children: .combine)
     }
 }

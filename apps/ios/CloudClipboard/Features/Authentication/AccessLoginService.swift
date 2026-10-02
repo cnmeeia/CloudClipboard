@@ -2,22 +2,20 @@
 //  AccessLoginService.swift
 //  CloudClipboard
 //
-//  Cloudflare Access 浏览器登录（系统 Safari 方案）：
-//    1. App 用 UIApplication.shared.open 打开 https://<host>/api/auth/done
+//  Cloudflare Access 浏览器登录：
+//    1. ASWebAuthenticationSession 打开 https://<host>/api/auth/done
 //       （该域名受 Cloudflare Access 保护）
-//    2. 用户在系统 Safari 里完成 Access 登录（Safari 里 Access 页面正常）
-//    3. Access 放行后，Worker 302 跳到 cloudclipboard://access-auth#token=<JWT>
-//    4. iOS 通过 URL Scheme 打开 App，onOpenURL 收到回调
-//    5. AccessLoginService.handleCallback 解析出 JWT，完成登录
+//    2. 用户在系统浏览器里完成 Access 登录
+//    3. Access 放行后，Worker 302 跳到 cloudclipboard://access-auth#token=<JWT>，
+//       会话自动关闭
+//    4. App 从回调 URL 的 fragment 解析出 JWT 返回给调用方
 //
-//  为什么不用 ASWebAuthenticationSession：
-//  Cloudflare Access 的登录页在内嵌浏览器里加载空白，无法完成登录。
-//  系统 Safari 是唯一可靠的路径。
-//
-//  为什么不用 Cookie：
-//  Safari 的 Cookie App 读不到，唯一的可靠通道是回调 URL 的 fragment。
+//  注意：不能依赖 HTTPCookieStorage.shared 读 CF_Authorization——
+//  ASWebAuthenticationSession 的 Cookie 存在 Safari 的存储里，App 读不到。
+//  唯一的可靠通道是回调 URL（Worker 已把 JWT 放进 fragment）。
 //
 
+import AuthenticationServices
 import Foundation
 import UIKit
 
@@ -39,16 +37,10 @@ public enum AccessLoginError: Error, LocalizedError {
 }
 
 @MainActor
-public final class AccessLoginService {
-    // 静态存储：signIn 可能由任意实例调用，回调由 App 统一入口处理，
-    // 用静态存储桥接，避免单例改造调用点。
-    private static var pendingContinuation: CheckedContinuation<String, Error>?
-    private static var timeoutTask: Task<Void, Never>?
+public final class AccessLoginService: NSObject {
+    private var currentSession: ASWebAuthenticationSession?
 
-    public init() {}
-
-    /// 在 baseURL 的 host 上完成 Access 登录，返回 JWT。
-    /// 会在系统 Safari 打开登录页，等待 Worker 回调。
+    /// 在 baseURL 的 host 上完成 Access 登录，返回 JWT（CF_Authorization cookie 的值）
     public func signIn(baseURL: URL) async throws -> String {
         guard let host = baseURL.host, !host.isEmpty,
               let loginURL = URL(string: "https://\(host)/api/auth/done")
@@ -56,45 +48,32 @@ public final class AccessLoginService {
             throw AccessLoginError.invalidHost
         }
 
-        // 取消之前的挂起登录（如果有）
-        Self.cancelPending()
-
         return try await withCheckedThrowingContinuation { continuation in
-            Self.pendingContinuation = continuation
-
-            // 5 分钟超时：用户在 Safari 放弃或关闭后回 App，视为取消
-            Self.timeoutTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
-                if Self.pendingContinuation != nil {
-                    Self.pendingContinuation?.resume(throwing: AccessLoginError.cancelled)
-                    Self.pendingContinuation = nil
+            let session = ASWebAuthenticationSession(
+                url: loginURL,
+                callbackURLScheme: "cloudclipboard"
+            ) { [weak self] callbackURL, _ in
+                // 优先从回调 URL 解析 JWT（Worker 已把 token 放进 fragment）；
+                // 拿不到则降级读共享 Cookie，最后才视为取消/失败
+                Task { @MainActor [weak self] in
+                    self?.currentSession = nil
+                    if let url = callbackURL,
+                       let token = Self.tokenFromCallbackURL(url),
+                       !token.isEmpty {
+                        continuation.resume(returning: token)
+                    } else if let jwt = Self.jwtFromSharedCookie(host: host), !jwt.isEmpty {
+                        continuation.resume(returning: jwt)
+                    } else {
+                        continuation.resume(throwing: AccessLoginError.cancelled)
+                    }
                 }
             }
-
-            // 在系统 Safari 打开（Access 登录页在 Safari 里正常）
-            UIApplication.shared.open(loginURL)
+            session.presentationContextProvider = self
+            // 必须共享 Cookie（默认即 false，这里显式声明意图）
+            session.prefersEphemeralWebBrowserSession = false
+            self.currentSession = session
+            session.start()
         }
-    }
-
-    /// 处理 cloudclipboard://access-auth 回调（静态，App 的 onOpenURL 直接调用）。
-    public static func handleCallback(url: URL) {
-        timeoutTask?.cancel()
-        timeoutTask = nil
-
-        if let token = Self.tokenFromCallbackURL(url), !token.isEmpty {
-            pendingContinuation?.resume(returning: token)
-        } else {
-            pendingContinuation?.resume(throwing: AccessLoginError.cancelled)
-        }
-        pendingContinuation = nil
-    }
-
-    /// 取消挂起的登录（内部使用）
-    private static func cancelPending() {
-        timeoutTask?.cancel()
-        timeoutTask = nil
-        pendingContinuation?.resume(throwing: AccessLoginError.cancelled)
-        pendingContinuation = nil
     }
 
     /// 从回调 URL 解析 JWT：
@@ -113,10 +92,26 @@ public final class AccessLoginService {
             .queryItems?.first(where: { $0.name == "token" })?.value
     }
 
-    /// 从共享 Cookie 读取 CF_Authorization（降级兜底，大概率读不到）
+    /// 从共享 Cookie 读取 CF_Authorization（即 Access JWT）
+    /// 注意：ASWebAuthenticationSession 的 Cookie 在 Safari 存储里，
+    /// 这里大概率读不到，仅作降级兜底。
     public static func jwtFromSharedCookie(host: String) -> String? {
         guard let url = URL(string: "https://\(host)") else { return nil }
         let cookies = HTTPCookieStorage.shared.cookies(for: url) ?? []
         return cookies.first(where: { $0.name == "CF_Authorization" })?.value
+    }
+}
+
+// MARK: - 弹窗锚点
+
+extension AccessLoginService: ASWebAuthenticationPresentationContextProviding {
+    public func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        // 系统总是在主线程回调这里
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first(where: { $0.isKeyWindow }) ?? ASPresentationAnchor()
+        }
     }
 }
