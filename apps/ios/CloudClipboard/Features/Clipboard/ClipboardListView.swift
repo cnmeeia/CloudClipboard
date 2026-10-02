@@ -122,7 +122,7 @@ struct ClipboardListView: View {
                     ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
                         ClipboardRowView(item: item)
                             .contentShape(Rectangle())
-                            .onTapGesture { copy(item) }
+                            .pressableScale(scale: 0.975) { copy(item) }
                             .contextMenu {
                                 contextMenu(for: item)
                             }
@@ -154,11 +154,15 @@ struct ClipboardListView: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textCase(nil)
+                        .padding(.leading, 4)
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .listSectionSpacing(18)
+        .contentMargins(.top, 8, for: .scrollContent)
+        .contentMargins(.bottom, 96, for: .scrollContent)
         .onAppear { appeared = true }
     }
 

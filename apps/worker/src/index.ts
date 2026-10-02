@@ -88,7 +88,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
 
   // Access 登录完成跳转（供 iOS ASWebAuthenticationSession 回调；边缘 Access 已 gate）
   if (p === "/api/auth/done" && request.method === "GET") {
-    return handleAuthDone()
+    return handleAuthDone(request)
   }
 
   // 当前用户身份（供前端派生 salt）

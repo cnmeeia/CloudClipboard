@@ -49,12 +49,6 @@ struct CloudClipboardApp: App {
                     await applyBiometricPolicy(onLaunch: true)
                 }
                 .onOpenURL { url in
-                    // Access 登录回调优先处理（不经过 DeepLinkRouter）
-                    if url.scheme?.lowercased() == "cloudclipboard",
-                       url.host?.lowercased() == "access-auth" {
-                        AccessLoginService.handleCallback(url: url)
-                        return
-                    }
                     router.handle(url: url)
                 }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in

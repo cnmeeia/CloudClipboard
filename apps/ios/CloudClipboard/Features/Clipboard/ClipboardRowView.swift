@@ -17,8 +17,11 @@ struct ClipboardRowView: View {
             Image(systemName: item.type.systemImage)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
-                .frame(width: 32, height: 32)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .frame(width: 36, height: 36)
+                .background(
+                    Color.accentColor.opacity(0.14),
+                    in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                )
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -50,10 +53,10 @@ struct ClipboardRowView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
         .background {
-            GlassSurface(cornerRadius: 14) { Color.clear }
+            GlassSurface(cornerRadius: 18) { Color.clear }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)

@@ -41,12 +41,15 @@ struct ToastMessage: Equatable, Identifiable {
 
 struct ToastView: View {
     let message: ToastMessage
+    @State private var iconBounced = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             Image(systemName: message.style.systemImage)
                 .foregroundStyle(message.style.tint)
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 19, weight: .semibold))
+                .scaleEffect(iconBounced ? 1 : 0.5)
+                .rotationEffect(.degrees(iconBounced ? 0 : -20))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -61,12 +64,15 @@ struct ToastView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 13)
         .frame(maxWidth: 360, alignment: .leading)
         .background {
-            GlassSurface(cornerRadius: 16) { Color.clear }
+            GlassSurface(cornerRadius: 20) { Color.clear }
         }
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .shadow(color: .black.opacity(0.14), radius: 16, y: 6)
+        .onAppear {
+            withAnimation(Motion.hero) { iconBounced = true }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(message.text)。\(message.detail ?? "")")
     }
