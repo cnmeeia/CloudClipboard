@@ -90,7 +90,7 @@ struct SetupView: View {
                     .frame(width: 72, height: 72)
                     .blur(radius: 2)
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 32, weight: .semibold))
+                    .font(Typography.font(size: 32, weight: .semibold, relativeTo: .largeTitle))
                     .foregroundStyle(.white)
                     .shadow(radius: 8)
             }
@@ -106,10 +106,10 @@ struct SetupView: View {
             .accessibilityHidden(true)
 
             Text("跨设备私有剪贴板")
-                .font(.system(.title2, design: .rounded).weight(.bold))
+                .font(Typography.title2Semibold)
                 .tracking(-0.02)
             Text("端到端加密，服务器永远看不到明文。")
-                .font(.subheadline)
+                .font(Typography.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
@@ -158,7 +158,7 @@ struct SetupView: View {
 
             HStack(spacing: 10) {
                 Rectangle().frame(height: 1).foregroundStyle(.separator)
-                Text("或").font(.caption2).foregroundStyle(.secondary)
+                Text("或").font(Typography.caption2).foregroundStyle(.secondary)
                 Rectangle().frame(height: 1).foregroundStyle(.separator)
             }
 
@@ -188,7 +188,7 @@ struct SetupView: View {
             Button("只测试连通性") {
                 Task { await testConnection() }
             }
-            .font(.footnote)
+            .font(Typography.footnote)
             .foregroundStyle(.secondary)
             .disabled(isBusy)
         }
@@ -202,7 +202,7 @@ struct SetupView: View {
                 Image(systemName: "checkmark.seal.fill")
                     .foregroundStyle(.green)
                 Text("已连接（\(environment.auth.method.displayName)）")
-                    .font(.subheadline.weight(.medium))
+                    .font(Typography.subheadlineMedium)
             }
 
             LabeledField(
@@ -226,7 +226,7 @@ struct SetupView: View {
             .disabled(seedPhrase.trimmingCharacters(in: .whitespaces).count < 8)
 
             Text("种子短语错误会导致无法解密历史记录，请与 Web 端保持一致。")
-                .font(.caption)
+                .font(Typography.caption)
                 .foregroundStyle(.secondary)
 
             Button {
@@ -236,7 +236,7 @@ struct SetupView: View {
                 seedPhrase = ""
             } label: {
                 Label("换一个账号", systemImage: "arrow.left")
-                    .font(.footnote)
+                    .font(Typography.footnote)
             }
             .foregroundStyle(.secondary)
         }
@@ -259,7 +259,7 @@ struct SetupView: View {
             }
             Spacer(minLength: 0)
             Text(step.title)
-                .font(.caption.weight(.semibold))
+                .font(Typography.captionSemibold)
                 .foregroundStyle(.secondary)
         }
     }
@@ -401,7 +401,7 @@ struct LabeledField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.caption.weight(.semibold))
+                .font(Typography.captionSemibold)
                 .foregroundStyle(.secondary)
 
             Group {
@@ -414,7 +414,7 @@ struct LabeledField: View {
                         .autocorrectionDisabled()
                 }
             }
-            .font(.body)
+            .font(Typography.body)
             .textFieldStyle(.plain)
             .padding(14)
             .background {
@@ -429,7 +429,7 @@ struct LabeledField: View {
 
             if let footnote {
                 Text(footnote)
-                    .font(.caption2)
+                    .font(Typography.caption2)
                     .foregroundStyle(.secondary)
             }
         }
@@ -442,11 +442,11 @@ struct InlineErrorView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.footnote)
+                .font(Typography.footnote)
                 .foregroundStyle(.orange)
                 .accessibilityHidden(true)
             Text(message)
-                .font(.footnote)
+                .font(Typography.footnote)
                 .foregroundStyle(.orange.opacity(0.95))
                 .fixedSize(horizontal: false, vertical: true)
         }

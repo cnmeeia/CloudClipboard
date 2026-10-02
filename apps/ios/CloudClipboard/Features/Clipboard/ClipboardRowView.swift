@@ -15,7 +15,7 @@ struct ClipboardRowView: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: item.type.systemImage)
-                .font(.system(size: 15, weight: .semibold))
+                .font(Typography.font(size: 15, weight: .semibold, relativeTo: .subheadline))
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 36, height: 36)
                 .background(
@@ -40,7 +40,7 @@ struct ClipboardRowView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                .font(.caption2)
+                .font(Typography.caption2)
                 .foregroundStyle(.secondary)
             }
 
@@ -48,7 +48,7 @@ struct ClipboardRowView: View {
 
             if item.type == .image || item.type == .file {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(Typography.captionSemibold)
                     .foregroundStyle(.tertiary)
                     .accessibilityHidden(true)
             }
@@ -71,9 +71,9 @@ struct ClipboardRowView: View {
         } else {
             HStack(spacing: 6) {
                 Image(systemName: "lock.trianglebadge.exclamationmark")
-                    .font(.caption)
+                    .font(Typography.caption)
                 Text("无法解密（种子短语不匹配）")
-                    .font(.subheadline)
+                    .font(Typography.subheadline)
             }
             .foregroundStyle(.secondary)
         }

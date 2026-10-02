@@ -27,40 +27,38 @@ import { fileURLToPath } from "node:url"
 globalThis.btoa = (s) => Buffer.from(s, "binary").toString("base64")
 globalThis.atob = (s) => Buffer.from(s, "base64").toString("binary")
 
-// ── 与 packages/crypto 的一致性断言（读取真实源码） ──
-const SOURCE_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "../../../packages/crypto/src/index.ts")
+// ── 与 iOS Swift 实现的一致性断言（读取真实源码） ──
+const SOURCE_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "../CloudClipboard/Core/Security/CryptoService.swift")
 const SOURCE = readFileSync(SOURCE_PATH, "utf8")
 
 function assertConstantsMatchSource() {
   const checks = [
-    [/PBKDF2_ITERATIONS = (\d[\d_]*)/, (m) => Number(m[1].replace(/_/g, "")) === 310_000],
-    [/SEED_SALT_PREFIX = "([^"]+)"/, (m) => m[1] === "cloudclipboard:v1:"],
-    [/encode\("(cloudclipboard:item-key:v1)"\)/, (m, full) => true],
-    [/getRandomValues\(new Uint8Array\((\d+)\)\)/, (m) => Number(m[1]) === 12],
-    [/tagLength: (\d+)/, (m) => Number(m[1]) === 128],
-    [/hash: "([A-Z0-9-]+)"/, (m) => m[1] === "SHA-256"],
+    [/pbkdf2Iterations:\s*UInt32\s*=\s*([\d_]+)/, (m) => Number(m[1].replace(/_/g, "")) === 310_000],
+    [/seedSaltPrefix\s*=\s*"([^"]+)"/, (m) => m[1] === "cloudclipboard:v1:"],
+    [/Data\("(cloudclipboard:item-key:v1)"\.utf8\)/, () => true],
+    [/ivLength\s*=\s*(\d+)/, (m) => Number(m[1]) === 12],
   ]
   for (const [re, ok] of checks) {
     const m = SOURCE.match(re)
     if (!m || !ok(m)) {
-      console.error(`✖ 与 packages/crypto 的常量不一致：${re}`)
+      console.error(`✖ 与 iOS CryptoService 的常量不一致：${re}`)
       console.error("  实测:", m ? m[0] : "<未匹配>")
       process.exit(1)
     }
   }
   if (!SOURCE.includes('"cloudclipboard:item-key:v1"')) {
-    console.error("✖ AAD 常量与 packages/crypto 不一致")
+    console.error("✖ AAD 常量与 iOS CryptoService 不一致")
     process.exit(1)
   }
-  console.log("✓ 常量与 packages/crypto/src/index.ts 一致")
+  console.log("✓ 常量与 CryptoService.swift 一致")
 }
 assertConstantsMatchSource()
 
 
-const b64u = (b) => Buffer.from(b).toString("base64").replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")
-const unb64u = (s) => new Uint8Array(Buffer.from(s.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(s.length/4)*4,"="), "base64"))
+const b64u = (b) => Buffer.from(b).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
+const unb64u = (s) => new Uint8Array(Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "="), "base64"))
 
-const vector = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../CloudClipboardTests/Resources/web-crypto-vector.json"),"utf8"))
+const vector = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../CloudClipboardTests/Resources/web-crypto-vector.json"), "utf8"))
 const masterKey = await deriveMasterKeyFromSeed(vector.seed, vector.userId)
 
 // ── Direction A: Web encrypts, iOS decrypts (vector) ──
@@ -74,10 +72,10 @@ console.log("A) 已提交向量可解密:", a === vector.plaintext ? "PASS" : "F
 const itemKeyRaw = crypto.getRandomValues(new Uint8Array(32))
 const itemKey = await crypto.subtle.importKey("raw", itemKeyRaw, "AES-GCM", false, ["encrypt"])
 const iv = crypto.getRandomValues(new Uint8Array(12))
-const combined = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv, tagLength:128}, itemKey, new TextEncoder().encode("iOS shape test")))
+const combined = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, tagLength: 128 }, itemKey, new TextEncoder().encode("iOS shape test")))
 const salt = crypto.getRandomValues(new Uint8Array(12))
 const wrapped = new Uint8Array(await crypto.subtle.encrypt(
-  {name:"AES-GCM", iv: salt, tagLength:128, additionalData: new TextEncoder().encode("cloudclipboard:item-key:v1")},
+  { name: "AES-GCM", iv: salt, tagLength: 128, additionalData: new TextEncoder().encode("cloudclipboard:item-key:v1") },
   masterKey, itemKeyRaw))
 
 console.log("B) layout: iv", iv.length, "salt", salt.length, "wrapped", wrapped.length, "(=32+16)", "combined", combined.length, "(=plaintext+16)")
@@ -97,7 +95,7 @@ try {
 
 // ── Direction D: wrong AAD must fail ──
 try {
-  const wrappedNoAad = new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM", iv: salt, tagLength:128}, masterKey, itemKeyRaw))
+  const wrappedNoAad = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: salt, tagLength: 128 }, masterKey, itemKeyRaw))
   await decryptClipboardContent(b64u(combined), b64u(iv), b64u(wrappedNoAad), b64u(salt), masterKey)
   console.log("D) AAD enforcement: FAIL")
 } catch { console.log("D) AAD enforcement: PASS") }
@@ -111,16 +109,20 @@ async function deriveMasterKeyFromSeed(seedPhrase, userId) {
   const baseKey = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(seedPhrase.trim()), "PBKDF2", false, ["deriveKey"])
   return crypto.subtle.deriveKey(
-    { name: "PBKDF2", hash: "SHA-256",
+    {
+      name: "PBKDF2", hash: "SHA-256",
       salt: new TextEncoder().encode("cloudclipboard:v1:" + userId),
-      iterations: 310_000 },
+      iterations: 310_000
+    },
     baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"])
 }
 
 async function decryptClipboardContent(encrypted, iv, wrappedKey, salt, masterKey) {
   const itemKeyRaw = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: unb64u(salt), tagLength: 128,
-      additionalData: new TextEncoder().encode("cloudclipboard:item-key:v1") },
+    {
+      name: "AES-GCM", iv: unb64u(salt), tagLength: 128,
+      additionalData: new TextEncoder().encode("cloudclipboard:item-key:v1")
+    },
     masterKey, unb64u(wrappedKey))
   const itemKey = await crypto.subtle.importKey("raw", itemKeyRaw, { name: "AES-GCM" }, false, ["decrypt"])
   const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64u(iv), tagLength: 128 }, itemKey, unb64u(encrypted))

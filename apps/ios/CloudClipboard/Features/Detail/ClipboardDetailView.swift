@@ -85,12 +85,12 @@ struct ClipboardDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label(item.type.displayName, systemImage: item.type.systemImage)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Typography.subheadlineSemibold)
                     .foregroundStyle(Color.accentColor)
                 Spacer()
                 if item.isPlain {
                     Text("未加密")
-                        .font(.caption2.weight(.semibold))
+                        .font(Typography.caption2Semibold)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(Color.orange.opacity(0.16), in: Capsule())
@@ -112,7 +112,7 @@ struct ClipboardDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Label("无法解密：种子短语与当前账号不匹配", systemImage: "lock.slash")
-                    .font(.subheadline)
+                    .font(Typography.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
@@ -124,7 +124,7 @@ struct ClipboardDetailView: View {
     private func metadataSection(_ item: ClipboardItemDTO) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("元信息")
-                .font(.footnote.weight(.semibold))
+                .font(Typography.footnoteSemibold)
                 .foregroundStyle(.secondary)
 
             metadataRow("来源设备", item.deviceName)
@@ -147,11 +147,11 @@ struct ClipboardDetailView: View {
     private func metadataRow(_ title: String, _ value: String) -> some View {
         HStack(alignment: .top) {
             Text(title)
-                .font(.subheadline)
+                .font(Typography.subheadline)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 12)
             Text(value)
-                .font(.subheadline)
+                .font(Typography.subheadline)
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
         }

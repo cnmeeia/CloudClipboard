@@ -78,7 +78,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: systemImage)
-                .font(.system(size: 34, weight: .medium))
+                .font(Typography.font(size: 34, weight: .medium, relativeTo: .largeTitle))
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 84, height: 84)
                 .background {
@@ -88,11 +88,11 @@ struct EmptyStateView: View {
                 .scaleEffect(appeared ? 1 : 0.8)
 
             Text(title)
-                .font(.system(.headline, design: .rounded))
+                .font(Typography.headline)
                 .multilineTextAlignment(.center)
 
             Text(message)
-                .font(.subheadline)
+                .font(Typography.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -124,7 +124,7 @@ struct ErrorStateView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 32, weight: .medium))
+                .font(Typography.font(size: 32, weight: .medium, relativeTo: .largeTitle))
                 .foregroundStyle(.orange)
                 .frame(width: 80, height: 80)
                 .background {
@@ -133,7 +133,7 @@ struct ErrorStateView: View {
                 .accessibilityHidden(true)
 
             Text(message)
-                .font(.subheadline)
+                .font(Typography.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -159,7 +159,7 @@ struct OfflineBanner: View {
             Image(systemName: "wifi.slash")
                 .accessibilityHidden(true)
             Text("网络不可用，显示本地缓存")
-                .font(.footnote.weight(.medium))
+                .font(Typography.footnoteMedium)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 14)
@@ -183,13 +183,13 @@ struct LockedOverlayView: View {
 
             VStack(spacing: 16) {
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 48))
+                    .font(Typography.font(size: 48, weight: .regular, relativeTo: .largeTitle))
                     .foregroundStyle(Color.accentColor)
                     .accessibilityHidden(true)
                 Text("CloudClipboard 已锁定")
-                    .font(.title3.weight(.semibold))
+                    .font(Typography.title3Semibold)
                 Text("验证身份后查看剪贴板内容")
-                    .font(.subheadline)
+                    .font(Typography.subheadline)
                     .foregroundStyle(.secondary)
                 Button("解锁", action: retry)
                     .buttonStyle(.borderedProminent)

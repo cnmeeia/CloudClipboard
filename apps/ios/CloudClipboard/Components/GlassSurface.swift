@@ -91,7 +91,7 @@ struct FloatingActionButton: View {
         if #available(iOS 26.0, *) {
             Button(action: action) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(Typography.font(size: 22, weight: .semibold, relativeTo: .title2))
                     .frame(width: 60, height: 60)
             }
             .buttonStyle(.glass)
@@ -107,7 +107,7 @@ struct FloatingActionButton: View {
     private var legacyButton: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 22, weight: .semibold))
+                .font(Typography.font(size: 22, weight: .semibold, relativeTo: .title2))
                 .foregroundStyle(Color.white)
                 .frame(width: 56, height: 56)
                 .background(Circle().fill(Color.accentColor.gradient))

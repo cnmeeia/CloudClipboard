@@ -23,6 +23,7 @@ struct RootView: View {
             }
         }
         .background(AppBackground())
+        .environment(\.font, Typography.body)
     }
 
     @ViewBuilder

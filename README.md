@@ -1,419 +1,190 @@
-# CloudClipboard V2
+# CloudClipboard iOS — 原生客户端
 
-**Your private clipboard, everywhere.**
+**不是 WKWebView 套壳。** 这是一个 SwiftUI 原生 iOS App，复用你现有的
+Cloudflare Worker / D1 / R2 / E2EE 后端，与 Web 端共享账号、数据与加密格式。
 
-跨设备个人私有 Universal Clipboard · **PWA + Bark + E2EE + Cloudflare**
-
-> 复制一次，所有设备可用。无需原生 App，无需 Apple Developer Account。
+- Swift 5.9 · SwiftUI · Swift Concurrency · Observation
+- iOS 17+（为 iOS 26 Liquid Glass 做了 `#available` 适配与兼容开关）
+- 全部使用 Apple 原生框架，**零第三方依赖**
 
 ---
 
-## ✨ 核心理念
+## 快速开始
 
-**Copy once. Available everywhere. Private by design.**
+### 1. 生成 Xcode 工程
 
-| 原则 | 实现 |
+`.xcodeproj` 是机器生成的巨型文件，本仓库用 [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+以 `project.yml` 作为单一事实来源：
+
+```bash
+brew install xcodegen
+cd apps/ios
+xcodegen generate          # 生成 CloudClipboard.xcodeproj
+open CloudClipboard.xcodeproj
+```
+
+### 2. 构建 / 测试 / 归档
+
+```bash
+./scripts/build-ios.sh            # CI 模式：无签名构建，验证 BUILD SUCCEEDED
+./scripts/build-ios.sh simulator  # 模拟器构建
+./scripts/build-ios.sh device     # 真机构建（无签名；加 TEAM=xxx 启用本地签名）
+./scripts/test-ios.sh             # 单元测试（含 E2EE 跨端互通）
+./scripts/archive-ios.sh          # 无签名 .xcarchive（不可分发，仅验证流程）
+TEAM=ABCDE12345 ./scripts/archive-ios.sh   # 使用自己的 Personal Team 签名
+```
+
+等价的裸命令（任务书要求的形式）：
+
+```bash
+xcodebuild -project apps/ios/CloudClipboard.xcodeproj \
+  -scheme CloudClipboard \
+  -sdk iphoneos \
+  CODE_SIGNING_ALLOWED=NO \
+  build
+```
+
+### 3. 首次启动配置
+
+App 启动后在引导页填两项：
+
+| 项目 | 从哪里来 |
 |---|---|
-| 简单 | 打开即用，onboarding 60 秒内完成 |
-| 快速 | Cloudflare 边缘网络，毫秒级同步 |
-| 私密 | AES-256-GCM 端到端加密，服务器永远看不到明文 |
-| 跨平台 | iPhone / iPad / Mac / Windows / Linux / Android |
-| 无安装门槛 | 纯 PWA，添加到主屏幕即用 |
-| 无原生 App | 不需要 Apple Developer Account |
+| 服务器地址 | 默认 `https://clip.0272.de5.net`（现有 PWA 域名） |
+| 访问令牌 | Web 端 **设置 → API Token → 生成**，复制 `cca_...` |
+| 种子短语 | 与 Web 端**完全相同**的种子短语（否则历史记录无法解密） |
 
-## 🎯 功能特性
+> **为什么用 API Token 而不是 Cloudflare Access？**
+> Access 是浏览器重定向 + Cookie 流程，原生 App 拿不到 `Cf-Access-Jwt-Assertion`。
+> Worker 的 `requireAuth()` 已支持 `Authorization: Bearer cca_...`，且该 token 行里
+> 固化的 `user_id` 与 Web 端完全一致 → PBKDF2 盐一致 → **主密钥一致 → 密文互通**。
+> 详见 `docs/ios-audit.md` §2。
 
-- **多类型剪贴板**：自动识别文本、URL、代码、JSON、颜色、OTP 验证码等，按类型智能渲染
-- **大文件支持**：文件经客户端加密后直传 R2，元数据存 D1
-- **即时同步**：30 秒轮询 + 页面可见性触发 + 手动刷新，顶栏实时同步状态指示
-- **⌘K 命令面板**：全局搜索、快速推送、斜杠指令（`/clear`、`/settings`、`/devices`、`/notifications`、`/theme`）
-- **跨设备 E2EE**：每条目独立 AES-256-GCM 密钥，主密钥由**种子短语** PBKDF2 派生，新设备输入同一短语即可解密
-- **设备管理**：查看在线设备、重命名、删除（删除即级联清理该设备的剪贴板与 R2 文件）
-- **Bark 通知**：新剪贴板 / 设备上线等事件推送到 iPhone，可按类型开关
-- **PWA 离线**：添加到主屏幕全屏运行，Workbox 预缓存，新版本可选择刷新
-- **响应式 + 动效**：桌面侧栏 / 移动底栏，Framer Motion 页面过渡，遵循 `prefers-reduced-motion`
-- **深色模式**：跟随系统或手动指定，偏好跨设备同步
+---
 
-## 🏗️ 架构
+## 免费 Apple ID（Personal Team）真机安装
 
-```
-                    CloudClipboard PWA
-                           │
-             ┌─────────────┴─────────────┐
-             │                           │
-           iPhone                       Mac
-             │                           │
-             └─────────────┬─────────────┘
-                           │
-                     HTTPS / API
-                           │
-                           ▼
-                 Cloudflare Worker
-                           │
-            ┌──────────────┼──────────────┐
-            │              │              │
-            ▼              ▼              ▼
-           D1             R2           Bark
-        Metadata        Files        通知通道
-```
+不需要付费 Apple Developer Program 也能装到自己的 iPhone 上：
 
-### 技术栈
+1. **Xcode → Settings → Accounts → +** 用普通 Apple ID 登录，Xcode 会自动创建 Personal Team。
+2. 打开 `CloudClipboard.xcodeproj`，选中 **CloudClipboard** target →
+   **Signing & Capabilities** → 勾选 *Automatically manage signing* →
+   Team 选你的 Personal Team。
+3. **改 Bundle ID**（Personal Team 的 ID 必须在你的账号下唯一）：
+   把 `de.cloudclipboard.ios.dev` 改成 `com.<你的名字>.cloudclipboard`。
+   四个 target 都要改（App / Widget / Share Extension / Intents），
+   Extension 的 ID 用主 App ID 加后缀，例如 `com.you.cloudclipboard.widget`。
+4. **删除 App Groups 能力**（Personal Team 不支持）：
+   四个 target 的 *Signing & Capabilities* 里删掉 **App Groups**。
+   代码会自动回退到沙盒目录（`SharedStore.isAppGroupAvailable == false`），
+   主 App 与 Share Extension 仍可通过 Keychain 共享令牌。
+5. **Universal Links 不可用**（同样需要付费账号）：
+   `Info.plist` 里的 `com.apple.developer.associated-domains` 与 entitlements 中的
+   同名条目需要删除或忽略，否则签名会报错。Custom URL Scheme
+   （`cloudclipboard://`）不受影响，仍然可用。
+6. iPhone 上 **设置 → 隐私与安全性 → 开发者模式 → 打开**，重启手机。
+7. Xcode 选中你的设备 → Run。首次运行会提示"不受信任的开发者"：
+   iPhone **设置 → 通用 → VPN与设备管理 → 信任你的 Apple ID**。
+8. Personal Team 的证书 **7 天过期**，到期后重新 Run 一次即可。
 
-- **前端**：React 19 · TypeScript · Vite 7 · Tailwind CSS v4 · React Router 8 · Framer Motion · lucide-react
-- **PWA**：vite-plugin-pwa（injectManifest）· Workbox 预缓存与离线回退 · 新版本更新提示
-- **后端**：Cloudflare Workers · D1 · R2 · Cron · Static Assets（与 Worker 同域部署 SPA）
-- **安全**：AES-256-GCM E2EE（Web Crypto API）· 边缘 Zero Trust（Access JWT）认证 · Zod 校验 · 速率限制
-- **通知**：Bark（iOS 可靠推送通道）
-- **工程**：pnpm workspace Monorepo · Vitest（含 jsdom 组件/视觉 QA）· Playwright · Wrangler
+---
 
-## 📁 项目结构
-
-```text
-cloudclipboard/
-│
-├── apps/
-│   ├── web/                    # React PWA
-│   │   ├── src/
-│   │   │   ├── components/     # UI 组件（RichCard/CommandPalette/SyncIndicator…）
-│   │   │   │   ├── settings/   # 设置页分区（连接/外观/安全/Token/关于）
-│   │   │   │   └── ui/         # 基础组件适配层（Button/Switch/图标导出）
-│   │   │   ├── pages/          # 页面（Onboarding/Dashboard/Clipboard/Detail/Devices/Notifications/Settings）
-│   │   │   ├── hooks/          # AppContext 全局状态、解密、复制等 hooks
-│   │   │   ├── lib/            # API 客户端、内容识别、动效常量、SW 更新
-│   │   │   ├── crypto/         # E2EE 解密（浏览器侧）
-│   │   │   ├── storage/        # IndexedDB + localStorage
-│   │   │   └── sw.ts           # Service Worker（injectManifest）
-│   │   ├── tests/              # Vitest（内容识别 / SW 更新 / 视觉 QA）
-│   │   └── public/             # 图标 / manifest
-│   │
-│   └── worker/                 # Cloudflare Worker
-│       ├── src/
-│       │   ├── routes/         # API 路由（devices/clipboard/files/push/tokens/prefs/me/health）
-│       │   ├── db/             # D1 数据访问层（参数化 SQL）
-│       │   ├── push/           # Bark 推送
-│       │   ├── auth/           # Access 身份解析与 userId 派生
-│       │   └── cron.ts         # 定时清理
-│       ├── tests/              # 单元测试
-│       └── wrangler.jsonc
-│
-├── packages/
-│   ├── types/                  # 共享类型
-│   ├── crypto/                 # E2EE 核心（浏览器/Worker/测试共用）
-│   └── shared/                 # Zod Schema、常量、工具
-│
-├── migrations/                 # D1 迁移
-├── scripts/                    # 冒烟测试、E2EE 推送、UI 审计脚本
-├── pnpm-workspace.yaml
-└── package.json
-```
-
-## 🚀 快速开始
-
-### 环境要求
-
-- Node.js ≥ 20.19
-- pnpm ≥ 9
-- Cloudflare 账号（免费版即可）
-
-### 1. 安装
-
-```bash
-pnpm install
-```
-
-### 2. 本地开发
-
-```bash
-pnpm dev              # 前端开发服务器（Vite）
-pnpm dev:worker       # Worker 本地模拟（wrangler dev）
-```
-
-### 3. 认证：仅由边缘 Zero Trust 负责，无登录验证
-
-本项目**已移除所有登录验证**（不再使用设备 Bearer token / OTP 配对）：
-
-1. 在 Cloudflare Zero Trust 控制台创建 **Access Application**，接入你的 Worker 域名（如 `clip.example.com`）。
-2. 将 Worker 的访问策略设为 **Allow / 指定邮箱或身份提供商**。
-3. **⚠️ 生产环境建议配置 Access JWT 验证**（防止绕过 Access 伪造邮箱头）：
-   - `CF_ACCESS_AUD` = Zero Trust → Access → 应用 → Application Audience (AUD) Tag
-   - `CF_ACCESS_TEAM_DOMAIN` = 你的 team 名（对应 `https://<team>.cloudflareaccess.com`）
-   - 配置后 Worker 会校验 `Cf-Access-Jwt-Assertion` 的签名、`iss`、`aud`、`exp`，不再信任裸邮箱头
-   - 建议同时设 `FORCE_ACCESS_JWT=true`（fail-closed，防止上线忘配）
-   - 详见 `apps/worker/.dev.vars.example` 与 `DEPLOY.md`
-
-- 用户访问时，Cloudflare Access 会在**边缘**完成登录（邮箱 / OTP / SSO），只有通过认证的请求才能到达 Worker。
-- Worker 从 Access 注入的 `CF-Access-Authenticated-User-Email` 请求头读取邮箱（未配置 JWT 校验时）或校验 `Cf-Access-Jwt-Assertion`（配置后），派生稳定的 `userId` 用于数据隔离（见 `apps/worker/src/auth/index.ts`）。
-- **数据保留**：`userId` 基于邮箱的稳定 SHA-256 派生，应用升级 / 重新登录后设备与剪贴板数据均不丢失。
-- **⚠️ 生产环境必须关闭 Worker 的 `*.workers.dev` 子域名路由**（仅保留自定义域名），避免绕过 Access 直接访问 Worker。
-
-本地开发可设置兜底邮箱（`.dev.vars`）：
-
-```bash
-CF_ACCESS_DEV_EMAIL="dev@example.com"
-```
-
-### 4. D1 迁移
-
-```bash
-pnpm db:migrate:local   # 本地数据库
-pnpm db:migrate         # 生产数据库（--remote）
-```
-
-### 5. 测试
-
-```bash
-pnpm test               # E2EE / Zod / 内容识别
-pnpm typecheck          # 全仓类型检查
-```
-
-### 6. 冒烟测试（Worker 完整链路）
-
-```bash
-bash scripts/smoke-worker.sh
-```
-
-### 7. 构建
-
-```bash
-pnpm build              # 全仓递归构建（web: vite build；worker: typecheck）
-```
-
-## ☁️ Cloudflare 部署
-
-### 1. 创建资源
-
-```bash
-cd apps/worker
-npx wrangler login
-
-# D1 数据库
-npx wrangler d1 create cloudclipboard
-# 将 database_id 填入 wrangler.jsonc
-
-# R2 存储桶
-npx wrangler r2 bucket create cloudclipboard-files
-```
-
-### 2. 应用迁移
-
-```bash
-pnpm db:migrate
-```
-
-### 3. 部署
-
-```bash
-pnpm deploy
-# = pnpm --filter @cloudclipboard/web build && pnpm --filter @cloudclipboard/worker deploy
-
-# 一键全流程：类型检查 + 远程 D1 迁移 + 前端构建 + Worker 部署
-pnpm deploy:full
-```
-
-> Worker 通过 Static Assets 将 `apps/web/dist` 与 API 同域托管（SPA 回退，`/api/*` 优先走 Worker），无需单独的前端托管。
-
-## 👀 在线预览 index.html
-
-仓库根目录的 `index.html` 是 **CNB CI/CD Dashboard** 静态页。提供三种免部署的在线预览方式：
-
-### 方式一：CNB 云原生开发（推荐，零配置）
-
-1. 打开仓库分支页，点击右上角 **「在线预览 index.html」** 按钮
-2. 环境就绪后点开 **PORTS** 面板，把 `8686` 端口映射出来，即可拿到形如
-   `https://<workspace>-8686.cnb.run` 的在线地址
-
-服务端是零依赖 Node 脚本 `.cnb/pages/serve.js`（监听 `0.0.0.0:8686`），
-按钮文案在 `.cnb/settings.yml` 的 `workspace.launch.button` 配置。
-
-```bash
-# 本地等价复现（无需装依赖）
-PREVIEW_ROOT=. PREVIEW_PORT=8686 node .cnb/pages/serve.js
-# 然后打开 http://localhost:8686/
-```
-
-### 方式二：本机起静态服务
-
-```bash
-npx serve -s -l 8686 .        # 或 python3 -m http.server 8686
-# 打开 http://localhost:8686/
-```
-
-### 方式三：raw 直链（仅下载/查看源码）
+## 项目结构
 
 ```
-https://cnb.cool/cnmeeia/ClipBoard/-/git/raw/main/index.html
+apps/ios/
+├── project.yml                     # XcodeGen 工程定义（改工程配置改这里）
+├── scripts/
+│   ├── build-ios.sh                # 构建
+│   ├── test-ios.sh                 # 测试
+│   ├── archive-ios.sh              # 归档
+│   ├── generate-crypto-vector.mjs  # 生成 E2EE 跨端测试向量（Web 侧）
+│   └── verify-crypto-interop.mjs   # 校验 iOS 产生的密文能被 Web 解密
+├── CloudClipboard/                 # 主 App
+│   ├── App/                        # 入口 / DI / 路由 / AppDelegate
+│   ├── Core/
+│   │   ├── Network/                # APIClient / 错误映射 / 重试 / 网络监听
+│   │   ├── Security/               # Keychain / CryptoKit E2EE / Face ID
+│   │   ├── Storage/                # SwiftData 离线缓存 / App Group 共享
+│   │   ├── Clipboard/              # 剪贴板 / 监控 / 触感 / Deep Link
+│   │   ├── Background/             # BGTaskScheduler
+│   │   ├── Notifications/          # UNUserNotificationCenter
+│   │   └── Spotlight/              # CoreSpotlight（默认关闭）
+│   ├── Models/                     # DTO（字段名与 Worker JSON 一致）
+│   ├── Services/                   # 仓库层 + SyncEngine
+│   ├── Features/                   # 列表 / 详情 / 搜索 / 设置 / 引导
+│   └── Components/                 # Liquid Glass / Toast / 骨架 / 状态视图
+├── CloudClipboardWidget/           # WidgetKit（small / medium / large）
+├── CloudClipboardShareExtension/   # Share Extension
+├── CloudClipboardIntents/          # AppIntents framework（App + Extension 共用）
+└── CloudClipboardTests/            # 单元测试
 ```
 
-> ⚠️ 注意 `/-/raw/` 并不是原始文件服务（会返回 CNB 的 Next.js 页面），
-> 原始文件路径是 **`/-/git/raw/<ref>/<path>`**。
-> 该地址返回 `Content-Type: text/plain`，浏览器会以纯文本展示，不能直接渲染页面。
+## 与后端的对接
 
-其他站点（如 `htmlpreview.github.io`）无法代理 CNB 文件：
-CNB 的 raw 响应 `Access-Control-Allow-Origin` 固定为 `https://docs.cnb.cool`，
-且只接受 GitHub 系地址，因此不可用。
+未修改任何 Worker / Web / D1 / R2 / migrations 文件。iOS 复用的端点：
 
-## 📱 iPhone 安装
-
-
-1. 用 **Safari** 打开 CloudClipboard
-2. 点击分享 → 「添加到主屏幕」
-3. 从主屏幕打开（standalone 模式）
-4. 进入「通知」页 → 配置 Bark URL 接收通知
-
-## 🖥️ Mac 安装
-
-1. 用 **Safari** 打开 CloudClipboard
-2. 菜单栏「文件」→「添加到程序坞」
-3. 从程序坞打开 → 进入「通知」页配置 Bark
-
-## 🔐 安全模型
-
-### 端到端加密（E2EE）
-
-```
-plaintext
-   ↓ 随机 item key（AES-256-GCM）
-ciphertext + IV
-   ↓ master key 包装 item key
-wrapped_key + salt
-   ↓
-上传到服务器（只存密文）
-```
-
-- 每个剪贴板条目使用**独立随机 AES-256-GCM key + 96-bit IV**
-- 设备 **master key** 存储于 IndexedDB（绝不入 localStorage）
-- 服务器只保存 ciphertext + wrapped key + metadata
-- 服务器**永远无法读取明文**
-
-### 认证
-
-- 登录验证已**全部移除**（无 JWT / 密钥 / token / OTP）。
-- 由 Cloudflare Zero Trust（Access）在**边缘**完成登录认证，Worker 仅从注入的邮箱头派生 `userId` 用于数据隔离。
-- 设备可重命名 / 撤销。
-
-### 配对（新设备）
-
-无需配对码：在新设备浏览器打开同一 Worker（通过 Cloudflare Access 登录）即可自动加入同一账户。
-
-### 数据清理
-
-- 剪贴板默认 7 天过期（可选手动 TTL；明文记录强制 ≤ 5 分钟）
-- Cloudflare Cron 每 30 分钟清理：过期条目及其 R2 文件 / 撤销满 7 天的设备 / 90 天前的审计日志 / 过期限流窗口
-
-## 📡 通知
-
-- **Bark** 作为唯一通知通道（iOS 可靠推送）
-- 剪贴板新增时向其他设备发送 Bark 通知（仅提示，不含明文）
-- 通知偏好可在「通知」页配置（剪贴板 / 设备上线 / 新设备 / 安全提醒）
-
-## 📦 API 文档
-
-| Method | Path | 说明 |
-|--------|------|------|
-| GET | `/api/health` | 健康检查（Worker/D1/R2，含部署版本元数据，无需鉴权） |
-| GET | `/api/me` | 当前用户身份（由邮箱派生的稳定 userId，供前端派生密钥 salt） |
-| GET | `/api/prefs` | 读取用户偏好（主题、通知设置等，跨设备同步） |
-| PUT | `/api/prefs` | 更新用户偏好 |
-| GET | `/api/devices` | 设备列表 |
-| POST | `/api/devices/register` | 注册/更新当前设备（upsert） |
-| PATCH | `/api/devices/:id` | 重命名设备 / 保存 Bark URL |
-| DELETE | `/api/devices/:id` | 删除设备 |
-| POST | `/api/push/test` | Bark 测试通知 |
-| GET | `/api/clipboard` | 剪贴板列表 |
-| POST | `/api/clipboard` | 上传剪贴板（密文） |
-| GET | `/api/clipboard/:id` | 单个剪贴板 |
-| DELETE | `/api/clipboard/:id` | 删除剪贴板 |
-| POST | `/api/files/upload` | R2 文件上传（客户端加密） |
-| GET | `/api/files/:key` | R2 文件读取 |
-| GET | `/api/tokens` | API Token 列表 |
-| POST | `/api/tokens` | 生成 API Token（明文仅显示一次） |
-| DELETE | `/api/tokens/:id` | 吊销 API Token |
-| POST | `/api/clipboard/plain` | curl 上传剪贴板（支持 passphrase 参数自动 E2EE，明文需 confirmPlaintext:true，需 Token） |
-
-错误格式统一：`{ "success": false, "error": { "code": "...", "message": "..." } }`
-
-### 🔑 API Token（curl / CLI 调用）
-
-浏览器端通过 Cloudflare Access 登录自动认证；**curl / 脚本 / CLI** 则用 API Token 认证，无需登录流程。
-
-1. **生成 Token**：在设置页 → API Token 生成，或在 Web 控制台调用：
-   ```bash
-   curl -X POST https://<worker>/api/tokens \
-     -H "Content-Type: application/json" \
-     -d '{"name":"macbook"}'
-   ```
-   > 明文 Token（`cca_...`）**仅生成时返回一次**，服务器只存 SHA-256 哈希，请立即保存。
-
-2. **上传剪贴板（E2EE，推荐）**：
-   ```bash
-   curl -X POST https://<worker>/api/clipboard/plain \
-     -H "Authorization: Bearer cca_你的Token" \
-     -H "Content-Type: application/json" \
-     -d '{"content":"要上传的内容", "type":"text", "passphrase":"你的种子短语"}'
-   ```
-   > 服务器用 PBKDF2 从 `passphrase` 派生密钥，对内容做 AES-256-GCM 加密后存储，
-   > `plain=0`，数据库内只有密文。前端输入相同 passphrase（种子短语）即可解密。
-
-3. **上传剪贴板（CLI 本地 E2EE）**：
-   使用 `scripts/e2ee-push.mjs` 在本地完成加密后再上传（真正的端到端加密，服务器接触不到明文）：
-   ```bash
-   node scripts/e2ee-push.mjs \
-     --url https://<worker> \
-     --token cca_你的Token \
-     --seed "你的种子短语" \
-     --content "要上传的内容"
-   ```
-   > ⚠️ 若 Worker 部署在 **Cloudflare Access** 之后，CLI/curl 请求默认会被边缘拦截并重定向到登录页。
-   > 请在 [Zero Trust → Access → Service Auth] 创建 **Service Token**，并加入该 Access 应用的授权，
-   > 然后设置 `CF_ACCESS_CLIENT_ID` 与 `CF_ACCESS_CLIENT_SECRET` 环境变量，脚本会自动带上认证头：
-   > ```bash
-   > export CF_ACCESS_CLIENT_ID="..." CF_ACCESS_CLIENT_SECRET="..."
-   > ```
-
-4. **上传剪贴板（明文，不推荐）**：
-   ```bash
-   curl -X POST https://<worker>/api/clipboard/plain \
-     -H "Authorization: Bearer cca_你的Token" \
-     -H "Content-Type: application/json" \
-     -d '{"content":"要上传的内容", "type":"text", "confirmPlaintext":true}'
-   ```
-   > ⚠️ 明文上传不经 E2EE，服务器可见明文。**必须显式传 `confirmPlaintext:true`**（防止误用导致明文落库），
-   > 且明文记录 TTL 强制 ≤ 5 分钟。仅建议个人自用 / 脚本推送。
-
-5. **吊销 Token**：`DELETE /api/tokens/:id`（携带 `Authorization: Bearer`）。
-
-## 🧪 测试
-
-```bash
-pnpm test
-```
-
-| 模块 | 覆盖 |
+| 端点 | 用途 |
 |---|---|
-| `packages/crypto` | AES-256-GCM round-trip、wrong key / wrong IV / tampered ciphertext 必须失败、key 包装、配对密钥派生 |
-| `apps/worker` | Zod Schema、平台检测、Rate Limit key |
-| `apps/web` | 内容智能识别（URL/Shell/JSON/OTP/颜色）、Service Worker 更新流程、设计系统视觉 QA（静态检查） |
-| 冒烟脚本 | 注册设备 → 剪贴板密文全链路 |
+| `GET /api/me` | 取 `userId`（PBKDF2 盐的一半） |
+| `POST /api/devices/register` | 注册设备（`device_type: "other"`，`platform: "ios"`） |
+| `GET /api/clipboard?limit=200` | 列表 |
+| `POST /api/clipboard` | 上传 E2EE 密文 |
+| `GET/DELETE /api/clipboard/:id` | 详情（图片/文件带 `base64_content`）/ 删除 |
+| `GET/PUT /api/prefs` | 主题 + 通知偏好跨设备同步 |
+| `PATCH /api/devices/:id` | 重命名 / 设置 Bark 地址 |
+| `GET/POST /api/tokens`、`DELETE /api/tokens/:id` | 令牌管理 |
 
-> Web 端测试基于 Vitest + jsdom；UI 审计与截图回归使用 Playwright（见 `scripts/ui-audit-engine.js`）。
+## E2EE 兼容性（最高优先级）
 
-## 🧭 V2 路线图
+算法与 `packages/crypto/src/index.ts` **逐字段一致**：
 
-- [x] pnpm Monorepo + React 19 + Tailwind v4
-- [x] E2EE（wrapped key 跨设备模式 + 种子短语 PBKDF2 派生，新设备输入短语即可解密）
-- [x] 设备管理（边缘 Zero Trust 认证，无配对码）
-- [x] D1 + R2 + Cron
-- [x] Bark 通知
-- [x] Dashboard / 剪贴板 / 详情 / 设备 / 通知 / 设置页面
-- [x] ⌘K 命令面板（搜索 / 推送 / 斜杠指令）
-- [x] PWA 离线缓存与版本更新提示
-- [x] Vitest + Playwright 视觉 QA 基础
-- [ ] master key QR 加密交换（种子短语之外的可选近场传输）
-- [ ] 离线队列（网络恢复自动补传）
-- [ ] 完整 Playwright E2E 交互测试（当前以视觉 QA 静态检查为主）
-- [ ] CLI / 浏览器扩展 / Raycast
-- [ ] NAS / S3 自托管存储
+```
+masterKey  = PBKDF2-SHA256(seedPhrase, "cloudclipboard:v1:" + userId, 310000, 32B)
+itemKey    = 随机 32B
+encrypted  = AES-256-GCM(itemKey, plaintext, iv=12B随机)      → ciphertext||tag
+wrappedKey = AES-256-GCM(masterKey, itemKey, iv=salt(12B随机),
+                          aad="cloudclipboard:item-key:v1")
+```
 
-## 📄 License
+该格式已用 **真实的 `packages/crypto` 代码**（Node webcrypto）双向验证：
 
-MIT
+```bash
+# 1) 用 Web 端同一算法生成向量 → 已提交到 CloudClipboardTests/Resources/
+node apps/ios/scripts/generate-crypto-vector.mjs
+# 2) iOS 测试用它验证「Web 加密 → iOS 解密」
+./scripts/test-ios.sh
+# 3) iOS 写的密文再回传 Node，验证「iOS 加密 → Web 解密」
+node apps/ios/scripts/verify-crypto-interop.mjs /tmp/ios-crypto-output.json
+```
+
+## 安全清单
+
+- ✅ Token / 种子短语 / 主密钥 → **Keychain**（`AfterFirstUnlockThisDeviceOnly`）
+- ✅ 本地缓存只存**密文**，明文只存在于内存 LRU（≤100 条），退到后台立即清空
+- ✅ 日志统一走 `OSLog`，代码里没有任何 `print`；`AppLog` 顶部写明脱敏红线
+- ✅ ATS 全开（无例外），强制 HTTPS
+- ✅ Face ID：Never / Immediately / 1 分钟 / 5 分钟
+- ✅ 剪贴板读取严格遵守隐私红线：只在 App active、用户主动触发或系统允许时读取，
+  且先用 `changeCount` + `hasStrings` 判断，**不做后台轮询**
+- ✅ Spotlight 索引默认关闭，可一键清除
+- ✅ Widget 只展示**截断摘要**（≤80 字符），可关闭并立即清空
+- ✅ 通知 payload 不含任何明文
+
+## 已知限制（诚实说明）
+
+1. **App Groups / Universal Links 需要付费账号。** 免费 Personal Team 下代码自动回退，
+   Share Extension 仍可用（通过 Keychain 共享凭据）。
+2. **`.xcarchive` 为 unsigned**，只用于验证流程，不能分发。
+   `archive-ios.sh` 不会伪造签名，也不会声称可以分发。
+3. **图片 / 文件二进制走内联摘要**：Share Extension 分享图片/文件时记录元数据与
+   可读文本；完整的 R2 二进制上传（`/api/files/upload`）已在 Worker 端支持，
+   但需要主 App 前台完成（Extension 时间/内存预算不足），当前版本会提示用户。
+4. **推送走服务端 Bark**（现有链路保留）；iOS 侧的 `UNUserNotificationCenter`
+   用于本地通知与深链跳转。APNs 接入需要付费账号的 Push 能力。
+5. **动态岛 / Live Activity / visionOS** 未实现（不在需求范围内）。
+
+## 相关文档
+
+- `docs/ios-audit.md` — Phase 1 现状审计（真实代码结论、认证约束、API 清单）
+- `docs/ios-architecture.md` — 架构、分层、系统能力落地、不变式

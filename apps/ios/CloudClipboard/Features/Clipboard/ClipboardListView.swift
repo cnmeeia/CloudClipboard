@@ -16,6 +16,7 @@ struct ClipboardListView: View {
     @State private var pendingDelete: ClipboardItemDTO?
     @State private var isPushingClipboard = false
     @State private var appeared = false
+    @State private var swipeManager = SwipeManager()
     @Environment(\.accessibilityReduceMotion) private var reducedMotion
 
     private var repository: ClipboardRepository { environment.clipboard }
@@ -120,38 +121,41 @@ struct ClipboardListView: View {
             ForEach(sections, id: \.title) { section in
                 Section {
                     ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
-                        ClipboardRowView(item: item)
-                            .contentShape(Rectangle())
-                            .pressableScale(scale: 0.975) { copy(item) }
-                            .contextMenu {
-                                contextMenu(for: item)
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button(role: .destructive) {
-                                    pendingDelete = item
-                                } label: {
-                                    Label("删除", systemImage: "trash")
+                        SwipeActionRow(
+                            id: item.id,
+                            manager: swipeManager,
+                            cornerRadius: 18,
+                            buttonWidth: 64,
+                            buttonSpacing: 10,
+                            onCopy: { copy(item) },
+                            onDelete: { pendingDelete = item }
+                        ) {
+                            ClipboardRowView(item: item)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    // 已展开时先收起，否则复制
+                                    if swipeManager.openID == item.id {
+                                        swipeManager.close()
+                                    } else {
+                                        copy(item)
+                                    }
                                 }
-
-                                Button {
-                                    copy(item)
-                                } label: {
-                                    Label("复制", systemImage: "doc.on.doc")
-                                }
-                                .tint(.accentColor)
-                            }
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                            .opacity(appeared ? 1 : 0)
-                            .offset(y: appeared ? 0 : 14)
-                            .animation(
-                                reducedMotion ? nil : Motion.spring.delay(Double(min(index, Motion.staggerMaxItems)) * Motion.staggerStep),
-                                value: appeared
-                            )
+                        }
+                        .contextMenu {
+                            contextMenu(for: item)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 14)
+                        .animation(
+                            reducedMotion ? nil : Motion.spring.delay(Double(min(index, Motion.staggerMaxItems)) * Motion.staggerStep),
+                            value: appeared
+                        )
                     }
                 } header: {
                     Text(section.title)
-                        .font(.footnote.weight(.semibold))
+                        .font(Typography.footnoteSemibold)
                         .foregroundStyle(.secondary)
                         .textCase(nil)
                         .padding(.leading, 4)
@@ -187,11 +191,11 @@ struct ClipboardListView: View {
                 ProgressView().controlSize(.mini)
             } else {
                 Image(systemName: repository.isOffline ? "wifi.slash" : "checkmark.icloud")
-                    .font(.caption)
+                    .font(Typography.caption)
                     .foregroundStyle(repository.isOffline ? .orange : .secondary)
             }
             Text(syncDescription)
-                .font(.caption2)
+                .font(Typography.caption2)
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
