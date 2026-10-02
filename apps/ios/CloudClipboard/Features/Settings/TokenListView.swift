@@ -43,7 +43,7 @@ struct TokenListView: View {
                             self.createdToken = nil
                             environment.tokens.clearNewlyCreated()
                         }
-                        .font(.footnote)
+                        .font(Typography.footnote)
                     }
                 }
             }
@@ -52,9 +52,9 @@ struct TokenListView: View {
                 ForEach(environment.tokens.tokens) { token in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(token.name)
-                            .font(.subheadline.weight(.medium))
+                            .font(Typography.subheadlineMedium)
                         Text(ClipboardDateFormatting.relative(for: Date(timeIntervalSince1970: Double(token.createdAt) / 1000)))
-                            .font(.caption2)
+                            .font(Typography.caption2)
                             .foregroundStyle(.secondary)
                     }
                     .swipeActions {
@@ -68,7 +68,7 @@ struct TokenListView: View {
 
                 if environment.tokens.tokens.isEmpty && !environment.tokens.isLoading {
                     Text("还没有令牌")
-                        .font(.footnote)
+                        .font(Typography.footnote)
                         .foregroundStyle(.secondary)
                 }
             }

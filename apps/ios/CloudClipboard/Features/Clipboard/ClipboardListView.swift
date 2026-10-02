@@ -151,7 +151,7 @@ struct ClipboardListView: View {
                     }
                 } header: {
                     Text(section.title)
-                        .font(.footnote.weight(.semibold))
+                        .font(Typography.footnoteSemibold)
                         .foregroundStyle(.secondary)
                         .textCase(nil)
                         .padding(.leading, 4)
@@ -187,11 +187,11 @@ struct ClipboardListView: View {
                 ProgressView().controlSize(.mini)
             } else {
                 Image(systemName: repository.isOffline ? "wifi.slash" : "checkmark.icloud")
-                    .font(.caption)
+                    .font(Typography.caption)
                     .foregroundStyle(repository.isOffline ? .orange : .secondary)
             }
             Text(syncDescription)
-                .font(.caption2)
+                .font(Typography.caption2)
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)

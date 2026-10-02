@@ -102,7 +102,7 @@ struct DevicesView: View {
     private func row(_ device: DeviceDTO) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: device.deviceType == "other" ? "iphone" : "laptopcomputer")
-                .font(.system(size: 16, weight: .semibold))
+                .font(Typography.font(size: 16, weight: .semibold, relativeTo: .callout))
                 .foregroundStyle(device.isOnline ? Color.accentColor : .secondary)
                 .frame(width: 32, height: 32)
                 .background(Color.accentColor.opacity(device.isOnline ? 0.14 : 0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -111,10 +111,10 @@ struct DevicesView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(device.name)
-                        .font(.subheadline.weight(.semibold))
+                        .font(Typography.subheadlineSemibold)
                     if device.id == environment.devices.deviceId {
                         Text("本机")
-                            .font(.caption2.weight(.semibold))
+                            .font(Typography.caption2Semibold)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Color.accentColor.opacity(0.16), in: Capsule())
@@ -122,12 +122,12 @@ struct DevicesView: View {
                 }
 
                 Text("\(device.platform) · \(device.isOnline ? "在线" : "离线") · \(ClipboardDateFormatting.relative(for: device.lastSeenDate))")
-                    .font(.caption2)
+                    .font(Typography.caption2)
                     .foregroundStyle(.secondary)
 
                 if let bark = device.barkUrl, !bark.isEmpty {
                     Label("已配置 Bark 通知", systemImage: "bell.badge")
-                        .font(.caption2)
+                        .font(Typography.caption2)
                         .foregroundStyle(.secondary)
                 }
             }

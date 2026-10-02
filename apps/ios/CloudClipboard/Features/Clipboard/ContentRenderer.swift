@@ -43,13 +43,13 @@ struct ContentRenderer: View {
     private var urlBody: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(trimmed)
-                .font(.subheadline.weight(.medium))
+                .font(Typography.subheadlineMedium)
                 .foregroundStyle(Color.accentColor)
                 .lineLimit(lineLimit)
 
             if let host = URL(string: trimmed)?.host {
                 Text(host)
-                    .font(.caption2)
+                    .font(Typography.caption2)
                     .foregroundStyle(.secondary)
             }
         }
@@ -85,7 +85,7 @@ struct ContentRenderer: View {
                 .kerning(2)
                 .accessibilityLabel("验证码 \(trimmed.map(String.init).joined(separator: " "))")
             Image(systemName: "lock.shield")
-                .font(.caption)
+                .font(Typography.caption)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }

@@ -47,17 +47,17 @@ struct ToastView: View {
         HStack(spacing: 12) {
             Image(systemName: message.style.systemImage)
                 .foregroundStyle(message.style.tint)
-                .font(.system(size: 19, weight: .semibold))
+                .font(Typography.font(size: 19, weight: .semibold, relativeTo: .headline))
                 .scaleEffect(iconBounced ? 1 : 0.5)
                 .rotationEffect(.degrees(iconBounced ? 0 : -20))
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(message.text)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Typography.subheadlineSemibold)
                 if let detail = message.detail {
                     Text(detail)
-                        .font(.caption)
+                        .font(Typography.caption)
                         .foregroundStyle(.secondary)
                 }
             }

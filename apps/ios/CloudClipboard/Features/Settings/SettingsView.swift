@@ -70,7 +70,7 @@ struct SettingsView: View {
             .disabled(isReauthing)
 
             Text("Access 会话会过期（时长由 Cloudflare Zero Trust 决定），过期后点这里重新登录；API 令牌不受影响。")
-                .font(.caption)
+                .font(Typography.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -113,7 +113,7 @@ struct SettingsView: View {
             .accessibilityLabel("主题模式")
 
             Text("主题会同步到你的其他设备（Web 端同样生效）。")
-                .font(.caption)
+                .font(Typography.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -146,7 +146,7 @@ struct SettingsView: View {
             }
 
             Text("仅在前台且系统允许时读取剪贴板，不做后台轮询。")
-                .font(.caption)
+                .font(Typography.caption)
                 .foregroundStyle(.secondary)
         }
     }
@@ -251,7 +251,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
-            .font(.footnote)
+            .font(Typography.footnote)
         }
     }
 
@@ -278,7 +278,7 @@ struct SettingsView: View {
             }
 
             Text("令牌保存在钥匙串中，不会写入 UserDefaults。")
-                .font(.caption)
+                .font(Typography.caption)
                 .foregroundStyle(.secondary)
         }
     }

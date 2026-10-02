@@ -55,10 +55,10 @@ struct CommandPaletteView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(environment.clipboard.plaintext(for: item).map { String($0.prefix(60)) } ?? "无法解密")
-                                        .font(.subheadline)
+                                        .font(Typography.subheadline)
                                         .lineLimit(1)
                                     Text("\(item.type.displayName) · \(ClipboardDateFormatting.relative(for: item.createdDate))")
-                                        .font(.caption2)
+                                        .font(Typography.caption2)
                                         .foregroundStyle(.secondary)
                                 }
                             }
