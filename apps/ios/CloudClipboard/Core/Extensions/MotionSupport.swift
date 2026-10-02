@@ -49,44 +49,6 @@ public extension View {
     }
 }
 
-// MARK: - 按压回弹（玻璃材质的「可按压」反馈）
-
-/// 按下时整体轻微收缩、松开回弹；Reduce Motion 下不缩放。
-struct PressableScale: ViewModifier {
-    var scale: CGFloat = 0.97
-    var action: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPressed = false
-    private let feedback = UISelectionFeedbackGenerator()
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isPressed && !reduceMotion ? scale : 1)
-            .animation(Motion.quick, value: isPressed)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !isPressed {
-                            isPressed = true
-                            feedback.selectionChanged()
-                        }
-                    }
-                    .onEnded { _ in
-                        isPressed = false
-                        action()
-                    }
-            )
-    }
-}
-
-public extension View {
-    /// 玻璃卡片/按钮的按压回弹
-    func pressableScale(scale: CGFloat = 0.97, action: @escaping () -> Void) -> some View {
-        modifier(PressableScale(scale: scale, action: action))
-    }
-}
-
 // MARK: - 自适应玻璃按钮样式
 
 /// 给视图内部的按钮应用自适应样式：iOS 26+ 用系统玻璃按钮，旧系统回退 .bordered。

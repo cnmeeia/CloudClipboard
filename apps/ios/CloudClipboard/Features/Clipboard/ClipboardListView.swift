@@ -122,7 +122,7 @@ struct ClipboardListView: View {
                     ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
                         ClipboardRowView(item: item)
                             .contentShape(Rectangle())
-                            .pressableScale(scale: 0.975) { copy(item) }
+                            .onTapGesture { copy(item) }
                             .contextMenu {
                                 contextMenu(for: item)
                             }
