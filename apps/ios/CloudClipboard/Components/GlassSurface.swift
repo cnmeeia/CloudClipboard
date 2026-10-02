@@ -25,7 +25,7 @@ struct GlassSurface<Content: View>: View {
             .clipShape(shape)
     }
 
-    private var shape: some Shape {
+    private var shape: some InsettableShape {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     }
 
