@@ -44,9 +44,11 @@ public enum ClipboardDateFormatting {
         guard let date else { return "永久" }
         let interval = date.timeIntervalSince(now)
         if interval <= 0 { return "已过期" }
-        let hours = Int(interval / 3600)
-        if hours < 1 { return "\(max(1, Int(interval / 60))) 分钟后过期" }
-        if hours < 24 { return "\(hours) 小时后过期" }
-        return "\(hours / 24) 天后过期"
+        // 按单位四舍五入，避免调用方与此处取 now 的微小差异在整点边界产生截断跳变
+        let minutes = (interval / 60).rounded()
+        if minutes < 60 { return "\(max(1, Int(minutes))) 分钟后过期" }
+        let hours = (interval / 3600).rounded()
+        if hours < 24 { return "\(Int(hours)) 小时后过期" }
+        return "\(Int((interval / 86_400).rounded())) 天后过期"
     }
 }
