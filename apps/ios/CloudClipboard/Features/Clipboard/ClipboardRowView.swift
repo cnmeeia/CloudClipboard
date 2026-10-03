@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import CloudClipboardShared
 
 struct ClipboardRowView: View {
     @Environment(AppEnvironment.self) private var environment

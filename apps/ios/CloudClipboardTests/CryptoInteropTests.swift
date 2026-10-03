@@ -11,6 +11,7 @@
 
 import XCTest
 import CryptoKit
+import CloudClipboardShared
 @testable import CloudClipboard
 
 final class CryptoInteropTests: XCTestCase {

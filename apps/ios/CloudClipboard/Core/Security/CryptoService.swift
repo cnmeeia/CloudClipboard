@@ -83,9 +83,9 @@ public struct EncryptedPayload: Sendable, Equatable {
 // MARK: - CryptoService
 
 public protocol CryptoServiceProtocol: Sendable {
-    func deriveMasterKey(seedPhrase: String, userId: String) throws -> SymmetricKey
-    func encryptClipboardContent(_ plaintext: String, masterKey: SymmetricKey) throws -> EncryptedPayload
-    func decryptClipboardContent(
+    public func deriveMasterKey(seedPhrase: String, userId: String) throws -> SymmetricKey
+    public func encryptClipboardContent(_ plaintext: String, masterKey: SymmetricKey) throws -> EncryptedPayload
+    public func decryptClipboardContent(
         encrypted: String,
         iv: String,
         wrappedKey: String,

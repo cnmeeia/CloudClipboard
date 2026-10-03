@@ -9,6 +9,7 @@
 import Foundation
 #if canImport(UIKit)
 import UIKit
+import CloudClipboardShared
 #endif
 
 @MainActor

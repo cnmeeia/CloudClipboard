@@ -14,6 +14,7 @@ import Foundation
 import CoreSpotlight
 import MobileCoreServices
 import UniformTypeIdentifiers
+import CloudClipboardShared
 
 public struct SpotlightItem: Sendable {
     public let id: String

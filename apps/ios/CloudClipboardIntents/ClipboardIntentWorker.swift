@@ -16,6 +16,7 @@
 import Foundation
 import CryptoKit
 import Security
+import CloudClipboardShared
 
 public final class ClipboardIntentWorker: @unchecked Sendable {
     public static let shared = ClipboardIntentWorker()

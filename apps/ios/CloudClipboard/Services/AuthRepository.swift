@@ -13,6 +13,7 @@
 
 import Foundation
 import CryptoKit
+import CloudClipboardShared
 
 /// 登录方式（两个入口）
 public enum AuthMethod: String, Sendable {

@@ -10,6 +10,7 @@
 
 import Foundation
 import UIKit
+import CloudClipboardShared
 
 public enum QuickAction: String, CaseIterable {
     case newClipboard = "de.cloudclipboard.ios.dev.quickaction.new"

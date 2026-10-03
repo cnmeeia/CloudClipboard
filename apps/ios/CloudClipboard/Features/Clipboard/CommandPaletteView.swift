@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import CloudClipboardShared
 
 struct CommandPaletteView: View {
     @Environment(AppEnvironment.self) private var environment

@@ -11,6 +11,7 @@
 
 import Foundation
 import Observation
+import CloudClipboardShared
 
 @MainActor
 @Observable
