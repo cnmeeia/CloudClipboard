@@ -13,29 +13,14 @@
 #   ./scripts/build-ios.sh [simulator|device|ci]
 #
 
-set -euo pipefail
+# shellcheck source=common.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IOS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-PROJECT="${IOS_DIR}/CloudClipboard.xcodeproj"
-SCHEME="CloudClipboard"
 MODE="${1:-ci}"
 
-log() { printf '\033[1;34m▶ %s\033[0m\n' "$*"; }
-die() { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
-
 # ── 前置检查 ─────────────────────────────────────────────
-command -v xcodebuild >/dev/null 2>&1 || die "未找到 xcodebuild：请在 macOS 上运行（需 Xcode 15+）"
-
-# 生成工程（若使用 XcodeGen 定义）
-if [[ ! -d "${PROJECT}" ]]; then
-  if command -v xcodegen >/dev/null 2>&1; then
-    log "未找到 ${PROJECT}，用 XcodeGen 生成"
-    (cd "${IOS_DIR}" && xcodegen generate)
-  else
-    die "缺少 ${PROJECT}。请安装 XcodeGen（brew install xcodegen）后在 apps/ios 执行 xcodegen generate"
-  fi
-fi
+require_xcodebuild
+ensure_project
 
 log "Xcode: $(xcodebuild -version | head -1)"
 

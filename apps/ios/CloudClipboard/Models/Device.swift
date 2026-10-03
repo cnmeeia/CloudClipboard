@@ -46,10 +46,6 @@ public struct DeviceResponse: Decodable, Sendable {
     public let device: DeviceDTO
 }
 
-public struct PushTestResponse: Decodable, Sendable {
-    public let success: Bool
-}
-
 /// POST /api/devices/register —— device_type 仅接受 pwa | cli | extension | other
 public struct RegisterDeviceRequest: Encodable, Sendable {
     public let id: String

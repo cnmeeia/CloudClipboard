@@ -29,26 +29,6 @@ public enum Motion {
     public static let staggerMaxItems = 8
 }
 
-// MARK: - 减弱动态效果
-
-private struct MotionAnimationModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let animation: Animation
-
-    func body(content: Content) -> some View {
-        content.transaction { transaction in
-            transaction.animation = reduceMotion ? nil : animation
-        }
-    }
-}
-
-public extension View {
-    /// 按「减弱动态效果」自动降级：开启时不做动画
-    func motion(_ animation: Animation) -> some View {
-        modifier(MotionAnimationModifier(animation: animation))
-    }
-}
-
 // MARK: - 按压回弹（玻璃材质的「可按压」反馈）
 
 /// 按下时整体轻微收缩、松开回弹；Reduce Motion 下不缩放。

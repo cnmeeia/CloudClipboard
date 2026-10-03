@@ -10,21 +10,13 @@
 #   TEAM=ABCDE12345 ./scripts/archive-ios.sh      # 使用本地 Personal Team 签名
 #
 
-set -euo pipefail
+# shellcheck source=common.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IOS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-PROJECT="${IOS_DIR}/CloudClipboard.xcodeproj"
 ARCHIVE_PATH="${IOS_DIR}/build/CloudClipboard.xcarchive"
 
-log() { printf '\033[1;34m▶ %s\033[0m\n' "$*"; }
-die() { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
-
-command -v xcodebuild >/dev/null 2>&1 || die "未找到 xcodebuild：请在 macOS 上运行"
-
-if [[ ! -d "${PROJECT}" ]] && command -v xcodegen >/dev/null 2>&1; then
-  (cd "${IOS_DIR}" && xcodegen generate)
-fi
+require_xcodebuild
+ensure_project
 
 if [[ -n "${TEAM:-}" ]]; then
   log "签名归档（TEAM=${TEAM}）"

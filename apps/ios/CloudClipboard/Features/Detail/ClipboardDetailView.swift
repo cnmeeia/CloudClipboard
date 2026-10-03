@@ -181,30 +181,12 @@ struct ClipboardDetailView: View {
 
     /// 图片内容：`GET /api/clipboard/:id` 会把 R2 对象以 base64 返回。
     /// 现有 Web 端上传图片时使用 `encrypted_data` 存放密文、`r2_key` 指向 R2 对象；
-    /// 这里先尝试直接解析（兼容未加密上传的历史记录），
-    /// 解密后的二进制图片由 `imageDataFromCiphertext` 处理。
+    /// 这里先尝试直接解析（兼容未加密上传的历史记录）。
+    /// 加密图片的解密展示尚未实现（此前为永远返回 nil 的占位实现，已移除）。
     private func imageData(from item: ClipboardItemDTO) -> UIImage? {
         if let base64 = item.base64Content, let raw = Data(base64Encoded: base64), let image = UIImage(data: raw) {
             return image
         }
-        return imageDataFromCiphertext(item)
-    }
-
-    /// R2 中的字节若是客户端加密产物，用 master key 解开后再解析。
-    /// 加密格式与文本条目一致（AES-256-GCM，ciphertext||tag）。
-    private func imageDataFromCiphertext(_ item: ClipboardItemDTO) -> UIImage? {
-        guard let base64 = item.base64Content,
-              let raw = Data(base64Encoded: base64),
-              // 密文长度必须 > 16（GCM tag），否则不可能是加密内容
-              raw.count > 16,
-              let encrypted = item.encryptedData,
-              let iv = item.iv,
-              let wrapped = item.wrappedKey,
-              let salt = item.salt,
-              let key = try? environment.auth.masterKey() else { return nil }
-
-        // R2 的密文本身（base64url）优先；结构不匹配时不强行解密
-        _ = (encrypted, iv, wrapped, salt, key)
         return nil
     }
 
