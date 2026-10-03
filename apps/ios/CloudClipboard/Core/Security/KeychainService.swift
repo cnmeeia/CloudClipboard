@@ -31,11 +31,11 @@ public enum KeychainKey: String, CaseIterable, Sendable {
 }
 
 public protocol KeychainServiceProtocol: Sendable {
-    func set(_ value: String, for key: KeychainKey) throws
-    func get(_ key: KeychainKey) -> String?
-    func remove(_ key: KeychainKey)
-    func removeAll()
-    func hasKeychainBackedSeed() -> Bool
+    public func set(_ value: String, for key: KeychainKey) throws
+    public func get(_ key: KeychainKey) -> String?
+    public func remove(_ key: KeychainKey)
+    public func removeAll()
+    public func hasKeychainBackedSeed() -> Bool
 }
 
 public struct KeychainService: KeychainServiceProtocol {
