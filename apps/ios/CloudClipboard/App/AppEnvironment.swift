@@ -10,6 +10,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import CloudClipboardShared
 
 @MainActor
 @Observable

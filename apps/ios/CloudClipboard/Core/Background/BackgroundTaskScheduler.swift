@@ -12,6 +12,7 @@
 import Foundation
 import BackgroundTasks
 import OSLog
+import CloudClipboardShared
 
 public final class BackgroundTaskScheduler {
     public static let refreshIdentifier = "de.cloudclipboard.ios.dev.refresh"

@@ -10,6 +10,7 @@
 import Foundation
 import UserNotifications
 import UIKit
+import CloudClipboardShared
 
 public enum NotificationEvent: Sendable, Equatable {
     case newClipboard(id: String?, deviceName: String)

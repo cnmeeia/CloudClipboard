@@ -15,6 +15,7 @@
 import Foundation
 import UIKit
 import Observation
+import CloudClipboardShared
 
 @MainActor
 @Observable

@@ -8,6 +8,7 @@
 
 import SwiftUI
 import SwiftData
+import CloudClipboardShared
 
 @main
 struct CloudClipboardApp: App {

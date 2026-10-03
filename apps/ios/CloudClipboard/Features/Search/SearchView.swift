@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import CloudClipboardShared
 
 struct SearchView: View {
     @Environment(AppEnvironment.self) private var environment

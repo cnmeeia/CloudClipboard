@@ -11,6 +11,7 @@
 
 import Foundation
 import SwiftData
+import CloudClipboardShared
 
 public enum SyncState: String, Codable, Sendable, CaseIterable {
     case synced

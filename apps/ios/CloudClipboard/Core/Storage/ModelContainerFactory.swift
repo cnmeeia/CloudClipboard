@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftData
+import CloudClipboardShared
 
 public enum ModelContainerFactory {
     public static let schema = Schema([CachedClipboardItem.self])
