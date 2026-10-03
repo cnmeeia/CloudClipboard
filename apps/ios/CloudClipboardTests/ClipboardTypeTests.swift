@@ -4,6 +4,7 @@
 //
 
 import XCTest
+import CloudClipboardShared
 @testable import CloudClipboard
 
 final class ClipboardTypeTests: XCTestCase {

@@ -73,7 +73,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev.shared
         PRODUCT_NAME: CloudClipboardShared
-        SKIP_INSTALL: NO
+        SKIP_INSTALL: YES
         GENERATE_INFOPLIST_FILE: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         DEFINES_MODULE: YES
@@ -135,9 +135,6 @@ targets:
       - path: CloudClipboardWidget
         excludes:
           - "Resources/Info.plist"
-      # Widget 进程无法承受 PBKDF2 310k 次迭代，只读主 App 解密的摘要
-      - path: CloudClipboardWidget/WidgetBridge.swift
-      - path: CloudClipboardWidget/WidgetPayload.swift
     dependencies:
       - target: CloudClipboardShared
       - sdk: WidgetKit.framework
@@ -193,7 +190,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.cloudclipboard.ios.dev.intents
         PRODUCT_NAME: CloudClipboardIntents
-        SKIP_INSTALL: NO
+        SKIP_INSTALL: YES
         GENERATE_INFOPLIST_FILE: YES
         APPLICATION_EXTENSION_API_ONLY: YES
         DEFINES_MODULE: YES

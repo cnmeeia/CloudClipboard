@@ -9,6 +9,7 @@
 import XCTest
 import SwiftData
 import CryptoKit
+import CloudClipboardShared
 @testable import CloudClipboard
 
 @MainActor

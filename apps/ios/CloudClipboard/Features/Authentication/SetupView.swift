@@ -12,6 +12,7 @@
 //
 
 import SwiftUI
+import CloudClipboardShared
 
 struct SetupView: View {
     @Environment(AppEnvironment.self) private var environment
