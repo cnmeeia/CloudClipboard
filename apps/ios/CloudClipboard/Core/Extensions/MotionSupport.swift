@@ -64,7 +64,10 @@ struct PressableScale: ViewModifier {
         content
             .scaleEffect(isPressed && !reduceMotion ? scale : 1)
             .animation(Motion.quick, value: isPressed)
-            .gesture(
+            // 注意：必须用 simultaneousGesture，不能独占手势——
+            // 独占的 DragGesture 会吃掉 List 的左滑，导致 swipeActions 出不来；
+            // 松手时只在位移很小时才触发 action，滑动时把手势让给 List。
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
                         if !isPressed {
@@ -72,9 +75,13 @@ struct PressableScale: ViewModifier {
                             feedback.selectionChanged()
                         }
                     }
-                    .onEnded { _ in
+                    .onEnded { value in
                         isPressed = false
-                        action()
+                        let dx = abs(value.translation.width)
+                        let dy = abs(value.translation.height)
+                        if dx < 12 && dy < 12 {
+                            action()
+                        }
                     }
             )
     }
