@@ -126,6 +126,18 @@ struct ClipboardListView: View {
                             .contextMenu {
                                 contextMenu(for: item)
                             }
+                            // 右滑（leading）：复制是最高频操作，整手势全滑直接复制，
+                            // toast + 震动即是确认，无需二次弹窗。
+                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                Button {
+                                    copy(item)
+                                } label: {
+                                    Label("复制", systemImage: "doc.on.doc")
+                                }
+                                .tint(.accentColor)
+                            }
+                            // 左滑（trailing）：删除走确认框，永不全滑误删；
+                            // 详情给一直藏着的详情页一个可发现的入口。
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     pendingDelete = item
@@ -134,11 +146,11 @@ struct ClipboardListView: View {
                                 }
 
                                 Button {
-                                    copy(item)
+                                    router.clipboardPath.append(.clipboardDetail(id: item.id))
                                 } label: {
-                                    Label("复制", systemImage: "doc.on.doc")
+                                    Label("详情", systemImage: "info.circle")
                                 }
-                                .tint(.accentColor)
+                                .tint(.secondary)
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
